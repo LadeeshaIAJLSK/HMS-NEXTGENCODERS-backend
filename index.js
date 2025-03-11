@@ -4,6 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const categoryRoutes = require("./routes/categoryRoutes"); // Import category routes
+const productRoutes = require("./routes/productRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5003;
@@ -20,5 +21,6 @@ mongoose
 
 // Use category routes
 app.use("/categories", categoryRoutes);
+app.use("/products", productRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
