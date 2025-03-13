@@ -29,7 +29,7 @@ export default function Home() {
 
      <div className='home-container'>
       <div className='user-card'>
-        <h2> Welcome,{user && user.name}</h2>
+        <h2> Wel,{user && user.name}</h2>
         <button className='logout-btn' onClick={handleLogout}>Logout</button>
         {user && user.role=='admin' ? <button className='admin-btn' onClick={gotoAdmin}>Go To admin</button> :''}
         
