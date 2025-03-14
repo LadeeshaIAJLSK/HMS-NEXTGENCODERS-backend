@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5003;
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
+// Connect to Mdb
 mongoose
   .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("MongoDB Connected"))
