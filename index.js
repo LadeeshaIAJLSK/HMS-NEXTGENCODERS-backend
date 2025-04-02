@@ -3,7 +3,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
-const categoryRoutes = require("./routes/categoryRoutes"); // Import category routes
+const categoryRoutes = require("./routes/categoryRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5003;
@@ -18,7 +19,7 @@ mongoose
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log(err));
 
-// Use category routes
 app.use("/categories", categoryRoutes);
+app.use("/api/auth", authRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
