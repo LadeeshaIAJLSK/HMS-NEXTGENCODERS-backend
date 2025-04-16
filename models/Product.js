@@ -7,25 +7,33 @@ const productSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    description: {
-      type: String,
-      trim: true,
-    },
     price: {
       type: Number,
       required: true,
+      min: 0
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    limit: {
+      type: Number,
+      default: null
     },
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
       required: true,
     },
-    image: {
-      type: String,
+    subCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null
     },
-    inStock: {
+    active: {
       type: Boolean,
-      default: true,
+      default: true
     }
   },
   { timestamps: true }
