@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const Room = require("../models/posts");
+const Room = require("../models/ownerdashboard");
 
-router.post("/posts/save", async (req, res) => {
+router.post("/save", async (req, res) => {
     try {
         const existingRoom = await Room.findOne({ RoomNo: req.body.RoomNo });
         if (existingRoom) {
@@ -68,5 +68,29 @@ router.delete("/rooms/:id", async (req, res) => {
     return res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 });
+
+
+router.put("/rooms/:id/status", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    const updatedRoom = await Room.findByIdAndUpdate(
+      id,
+      { RStatus: status },
+      { new: true }
+    );
+
+    if (!updatedRoom) {
+      return res.status(404).json({ success: false, error: "Room not found" });
+    }
+
+    return res.status(200).json({ success: true, message: "Room status updated", room: updatedRoom });
+  } catch (err) {
+    console.error(`Error updating room status with ID ${id}:`, err.message);
+    return res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
 
 module.exports = router;
