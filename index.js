@@ -4,7 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const categoryRoutes = require("./routes/categoryRoutes");
-const authRoutes = require("./routes/authRoutes");
+//const authRoutes = require("./routes/authRoutes");
 const productRoutes = require("./routes/productRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 
@@ -22,7 +22,7 @@ mongoose
   .catch((err) => console.log(err));
 
 app.use("/categories", categoryRoutes);
-app.use("/api/auth", authRoutes);
+//app.use("/api/auth", authRoutes);
 app.use("/products", productRoutes);
 app.use("/orders", orderRoutes);
 
