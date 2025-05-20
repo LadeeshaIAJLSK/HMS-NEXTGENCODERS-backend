@@ -1,7 +1,10 @@
 const express = require("express");//
 const mongoose = require("mongoose");//
 const cors = require("cors");
-const postRoutes = require("./routes/ownerdash");
+const postRoutes = require("./routes/posts");
+const roomRoutes = require("./routes/rooms");
+const reservationRoutes = require("./routes/reservation");
+const guestRoutes = require("./routes/guestRoutes");
 
 
 
@@ -20,7 +23,9 @@ app.use(express.json());//
 app.use(cors({ origin: "*" }));
 
 app.use("/api/posts", postRoutes);
-// Add this line to use the room routes
+app.use("/api/rooms", roomRoutes);
+app.use("/api/reservations", reservationRoutes);// Add this line to use the room routes
+app.use('/api/guests', guestRoutes);
 //i changes this
 
 
@@ -45,6 +50,9 @@ mongoose
   });
 
 app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
+
+
+
 
 
 

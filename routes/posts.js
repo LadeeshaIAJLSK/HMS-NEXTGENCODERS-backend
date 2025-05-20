@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Room = require("../models/ownerdashboard");
+const Room = require("../models/posts");
 
 router.post("/save", async (req, res) => {
     try {
