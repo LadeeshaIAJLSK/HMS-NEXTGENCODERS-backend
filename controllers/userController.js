@@ -1,6 +1,6 @@
 import userModel from "../models/userModel.js";
 
-export const getUserData = async (req, res) => {
+export const getUserData = async (req, res) => {  //Returns user’s name and whether their account is verified.//
     try {
         const { userId } = req.body;
         const user = await userModel.findById(userId);
@@ -21,7 +21,7 @@ export const getUserData = async (req, res) => {
     }
 }
 
-export const getDashboardData = async (req, res) => {
+export const getDashboardData = async (req, res) => { // Returns user’s dashboard data including total packages, active packages, and total spent. //
     try {
         const { userId } = req.body;
         const user = await userModel.findById(userId);

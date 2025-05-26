@@ -5,7 +5,7 @@ const connectDB = async ()=>{
 
 
     await mongoose.connect(`${ 
-process.env.MONGODB_URI }/mern-auth` 
+process.env.MONGODB_URI }/mern-auth`  //  `mongodb://localhost:27017/mern-auth` , 
 
 );
 };
