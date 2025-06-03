@@ -21,7 +21,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-
 // ✅ Get available rooms
 router.get("/available-rooms", async (req, res) => {
   try {
@@ -105,49 +104,136 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
   }
 });
 
-// ✅ Update reservation
-router.put("/:id", upload.array("idFiles"), async (req, res) => {
+// ✅ FIXED Update reservation - Handle JSON data properly
+router.put("/:id", async (req, res) => {
   try {
+    console.log("Update request received for ID:", req.params.id);
+    console.log("Request body:", req.body);
+
+    const reservationId = req.params.id;
     const formData = req.body;
-    const files = req.files;
 
-    const existingFiles = Array.isArray(formData.existingFiles)
-      ? formData.existingFiles
-      : [];
+    // Validate reservation exists
+    const existingReservation = await Reservation.findById(reservationId);
+    if (!existingReservation) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Reservation not found" 
+      });
+    }
 
-    const updatedRooms = JSON.parse(formData.selectedRooms || "[]");
-    const otherPersons = typeof formData.otherPersons === "string"
-      ? JSON.parse(formData.otherPersons)
-      : formData.otherPersons;
-
+    // Prepare update data with proper validation
     const updateData = {
-      ...formData,
-      otherPersons,
-      idFiles: [...existingFiles, ...files.map(file => file.path)],
-      selectedRooms: updatedRooms,
+      firstName: formData.firstName?.trim(),
+      middleName: formData.middleName?.trim() || "",
+      surname: formData.surname?.trim() || "",
+      mobile: formData.mobile?.trim(),
+      email: formData.email?.trim() || "",
+      dob: formData.dob || "",
+      address: formData.address?.trim() || "",
+      city: formData.city?.trim() || "",
+      gender: formData.gender || "",
+      idType: formData.idType || "",
+      idNumber: formData.idNumber?.trim() || "",
       checkIn: new Date(formData.checkIn),
       checkOut: new Date(formData.checkOut),
+      duration: parseInt(formData.duration) || 1,
+      adults: parseInt(formData.adults) || 1,
+      kids: parseInt(formData.kids) || 0,
+      otherPersons: formData.otherPersons || [],
+      selectedRooms: formData.selectedRooms || [],
+      country: formData.country || "",
+      countryCode: formData.countryCode || ""
     };
 
+    // Validate required fields
+    if (!updateData.firstName || !updateData.mobile || !updateData.checkIn || !updateData.checkOut) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Missing required fields: firstName, mobile, checkIn, checkOut" 
+      });
+    }
+
+    console.log("Prepared update data:", updateData);
+
+    // Get original rooms to update their status later
+    const originalRooms = existingReservation.selectedRooms || [];
+    const newRooms = updateData.selectedRooms || [];
+
+    // Update the reservation
     const updatedReservation = await Reservation.findByIdAndUpdate(
-      req.params.id,
+      reservationId,
       updateData,
-      { new: true }
+      { 
+        new: true, // Return updated document
+        runValidators: true // Run mongoose validations
+      }
     );
 
     if (!updatedReservation) {
-      return res.status(404).json({ message: "Reservation not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Failed to update reservation" 
+      });
     }
 
-    // Optional: Update room status
-    await Room.updateMany(
-      { RoomNo: { $in: updatedRooms } },
-      { $set: { RStatus: "Booked" } }
-    );
+    console.log("Successfully updated reservation:", updatedReservation._id);
 
-    res.json({ message: "Reservation updated successfully", updatedReservation });
+    // Update room statuses if rooms changed
+    if (JSON.stringify(originalRooms.sort()) !== JSON.stringify(newRooms.sort())) {
+      console.log("Updating room statuses...");
+      
+      // Mark old rooms as vacant (if they're not in the new selection)
+      const roomsToVacate = originalRooms.filter(room => !newRooms.includes(room));
+      if (roomsToVacate.length > 0) {
+        await Room.updateMany(
+          { RoomNo: { $in: roomsToVacate } },
+          { $set: { RStatus: "Vacant" } }
+        );
+        console.log("Vacated rooms:", roomsToVacate);
+      }
+
+      // Mark new rooms as booked
+      if (newRooms.length > 0) {
+        await Room.updateMany(
+          { RoomNo: { $in: newRooms } },
+          { $set: { RStatus: "Booked" } }
+        );
+        console.log("Booked rooms:", newRooms);
+      }
+    }
+
+    res.json({ 
+      success: true,
+      message: "Reservation updated successfully", 
+      updatedReservation 
+    });
+
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    console.error("Error updating reservation:", err);
+    
+    // More specific error handling
+    if (err.name === 'ValidationError') {
+      const validationErrors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ 
+        success: false,
+        message: "Validation error", 
+        errors: validationErrors 
+      });
+    }
+    
+    if (err.name === 'CastError') {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid reservation ID format" 
+      });
+    }
+
+    res.status(500).json({ 
+      success: false,
+      message: "Internal server error", 
+      error: err.message 
+    });
   }
 });
 
@@ -159,13 +245,51 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ message: "Reservation not found" });
     }
 
-    // Optional: Mark rooms as Vacant (if you want to free them on delete)
-    await Room.updateMany(
-      { RoomNo: { $in: reservation.selectedRooms } },
-      { $set: { RStatus: "Vacant" } }
-    );
+    // Mark rooms as Vacant when reservation is deleted
+    if (reservation.selectedRooms && reservation.selectedRooms.length > 0) {
+      await Room.updateMany(
+        { RoomNo: { $in: reservation.selectedRooms } },
+        { $set: { RStatus: "Vacant" } }
+      );
+    }
 
     res.json({ message: "Reservation deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting reservation:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ✅ Checkout endpoint
+router.put("/:id/checkout", async (req, res) => {
+  try {
+    const reservation = await Reservation.findByIdAndUpdate(
+      req.params.id,
+      { 
+        status: "checked_out",
+        checkoutDate: new Date()
+      },
+      { new: true }
+    );
+
+    if (!reservation) {
+      return res.status(404).json({ message: "Reservation not found" });
+    }
+
+    res.json({ message: "Guest checked out successfully", reservation });
+  } catch (err) {
+    console.error("Error during checkout:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ✅ Get payments for a reservation
+router.get("/:id/payments", async (req, res) => {
+  try {
+    // This assumes you have a Payment model or payments are stored in the reservation
+    // Adjust according to your payment storage structure
+    const payments = []; // Replace with actual payment fetching logic
+    res.json(payments);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
