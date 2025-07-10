@@ -116,26 +116,62 @@ reservationSchema.pre('save', function(next) {
 
 // Update room statuses when reservation changes
 reservationSchema.post('save', async function(doc) {
-  const Room = mongoose.model('Room');
-  
-  if (doc.status === 'Confirmed' || doc.status === 'CheckedIn') {
-    await Room.updateMany(
-      { RoomNo: { $in: doc.selectedRooms } },
-      { $set: { RStatus: 'Occupied' } }
-    );
-  } else if (doc.status === 'CheckedOut' || doc.status === 'Cancelled') {
-    await Room.updateMany(
-      { RoomNo: { $in: doc.selectedRooms } },
-      { $set: { RStatus: 'Vacant' } }
-    );
+  try {
+    // Import the Room model - adjust the path to match your project structure
+    const Room = require('./posts'); // This should match your Room model file
+    
+    if (doc.status === 'Confirmed' || doc.status === 'CheckedIn') {
+      await Room.updateMany(
+        { RoomNo: { $in: doc.selectedRooms } },
+        { $set: { RStatus: 'Occupied' } }
+      );
+    } else if (doc.status === 'CheckedOut' || doc.status === 'Cancelled') {
+      await Room.updateMany(
+        { RoomNo: { $in: doc.selectedRooms } },
+        { $set: { RStatus: 'Vacant' } }
+      );
+    }
+  } catch (error) {
+    console.error('Error updating room statuses:', error);
   }
 });
 
 // Static method to calculate total amount
 reservationSchema.statics.calculateTotal = async function(roomNos, duration) {
-  const Room = mongoose.model('Room');
-  const rooms = await Room.find({ RoomNo: { $in: roomNos } });
-  return rooms.reduce((sum, room) => sum + room.RPrice, 0) * duration;
+  try {
+    // Import the Room model - adjust the path to match your project structure
+    const Room = require('./posts'); // This should match your Room model file
+    
+    console.log('Calculating total for rooms:', roomNos, 'duration:', duration);
+    
+    const rooms = await Room.find({ RoomNo: { $in: roomNos } });
+    
+    if (rooms.length === 0) {
+      console.log('No rooms found for calculation');
+      return 0;
+    }
+    
+    console.log('Found rooms:', rooms.map(r => ({ 
+      roomNo: r.RoomNo, 
+      price: r.RPrice || r.Price || 0 
+    })));
+    
+    const totalRoomPrice = rooms.reduce((sum, room) => {
+      // Handle both RPrice and Price fields
+      const roomPrice = room.RPrice || room.Price || 0;
+      console.log(`Room ${room.RoomNo}: ${roomPrice}`);
+      return sum + roomPrice;
+    }, 0);
+    
+    const totalAmount = totalRoomPrice * duration;
+    console.log('Total room price per night:', totalRoomPrice);
+    console.log('Total amount for', duration, 'nights:', totalAmount);
+    
+    return totalAmount;
+  } catch (error) {
+    console.error('Error calculating total amount:', error);
+    return 0;
+  }
 };
 
 module.exports = mongoose.model('Reservation', reservationSchema);
