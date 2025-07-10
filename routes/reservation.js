@@ -71,40 +71,121 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ✅ Submit reservation (Create)
+// ✅ Submit reservation (Create) - UPDATED WITH PRICE CALCULATION
 router.post("/", upload.array("idFiles"), async (req, res) => {
   try {
     const formData = req.body;
     const files = req.files;
 
+    console.log("Form data received:", formData);
+
     const otherPersons = JSON.parse(formData.otherPersons || "[]");
     const selectedRooms = JSON.parse(formData.selectedRooms || "[]");
 
-    const reservation = new Reservation({
-      ...formData,
-      otherPersons,
-      idFiles: files.map((file) => file.path),
-      selectedRooms,
-      checkIn: new Date(formData.checkIn),
-      checkOut: new Date(formData.checkOut),
-    });
+    // Validate required fields
+    if (!formData.checkIn || !formData.checkOut || !formData.firstName || !formData.mobile) {
+      return res.status(400).json({ 
+        message: "Missing required fields: checkIn, checkOut, firstName, mobile" 
+      });
+    }
 
+    if (selectedRooms.length === 0) {
+      return res.status(400).json({ 
+        message: "At least one room must be selected" 
+      });
+    }
+
+    // Calculate duration
+    const checkInDate = new Date(formData.checkIn);
+    const checkOutDate = new Date(formData.checkOut);
+    const duration = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+
+    if (duration <= 0) {
+      return res.status(400).json({ 
+        message: "Check-out date must be after check-in date" 
+      });
+    }
+
+    // Calculate total amount using the static method from the model
+    const totalAmount = await Reservation.calculateTotal(selectedRooms, duration);
+
+    console.log("Calculated total amount:", totalAmount);
+
+    // Prepare reservation data
+    const reservationData = {
+      checkIn: checkInDate,
+      checkOut: checkOutDate,
+      duration: duration,
+      adults: parseInt(formData.adults) || 1,
+      kids: parseInt(formData.kids) || 0,
+      firstName: formData.firstName,
+      middleName: formData.middleName || "",
+      surname: formData.surname || "",
+      mobile: formData.mobile,
+      email: formData.email || "",
+      dob: formData.dob ? new Date(formData.dob) : null,
+      address: formData.address,
+      city: formData.city || "",
+      gender: formData.gender || "",
+      idType: formData.idType,
+      idNumber: formData.idNumber,
+      country: formData.country || "",
+      countryCode: formData.countryCode || "",
+      otherPersons: otherPersons,
+      selectedRooms: selectedRooms,
+      idFiles: files.map((file) => file.path),
+      
+      // Payment fields
+      totalAmount: totalAmount,
+      paidAmount: parseFloat(formData.advancePayment || formData.paidAmount || 0),
+      paymentMethod: formData.paymentMethod || "",
+      paymentNotes: formData.paymentNotes || "",
+      
+      // Set status to Confirmed
+      status: "Confirmed"
+    };
+
+    console.log("Creating reservation with data:", reservationData);
+
+    const reservation = new Reservation(reservationData);
     const saved = await reservation.save();
 
-    // Book rooms
+    console.log("Reservation saved:", saved._id);
+
+    // Book rooms - Update status to 'Occupied' instead of 'Booked'
     await Room.updateMany(
       { RoomNo: { $in: selectedRooms } },
-      { $set: { RStatus: "Booked" } }
+      { $set: { RStatus: "Occupied" } }
     );
 
-    res.status(201).json(saved);
+    console.log("Rooms updated to Occupied:", selectedRooms);
+
+    // Return success response with amount details
+    res.status(201).json({
+      message: "Reservation created successfully",
+      reservation: {
+        _id: saved._id,
+        totalAmount: saved.totalAmount,
+        paidAmount: saved.paidAmount,
+        amountDue: saved.totalAmount - saved.paidAmount,
+        status: saved.status,
+        selectedRooms: saved.selectedRooms,
+        checkIn: saved.checkIn,
+        checkOut: saved.checkOut,
+        duration: saved.duration
+      }
+    });
+
   } catch (err) {
     console.error("Error creating reservation:", err);
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ 
+      message: "Error creating reservation", 
+      error: err.message 
+    });
   }
 });
 
-// ✅ FIXED Update reservation - Handle JSON data properly
+// ✅ FIXED Update reservation - Handle JSON data properly WITH PRICE CALCULATION
 router.put("/:id", async (req, res) => {
   try {
     console.log("Update request received for ID:", req.params.id);
@@ -122,6 +203,22 @@ router.put("/:id", async (req, res) => {
       });
     }
 
+    // Calculate duration if dates are provided
+    let duration = parseInt(formData.duration);
+    if (formData.checkIn && formData.checkOut) {
+      const checkInDate = new Date(formData.checkIn);
+      const checkOutDate = new Date(formData.checkOut);
+      duration = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+    }
+
+    // Calculate total amount if rooms or duration changed
+    let totalAmount = formData.totalAmount;
+    const selectedRooms = formData.selectedRooms || [];
+    
+    if (selectedRooms.length > 0 && duration > 0) {
+      totalAmount = await Reservation.calculateTotal(selectedRooms, duration);
+    }
+
     // Prepare update data with proper validation
     const updateData = {
       firstName: formData.firstName?.trim(),
@@ -137,13 +234,17 @@ router.put("/:id", async (req, res) => {
       idNumber: formData.idNumber?.trim() || "",
       checkIn: new Date(formData.checkIn),
       checkOut: new Date(formData.checkOut),
-      duration: parseInt(formData.duration) || 1,
+      duration: duration,
       adults: parseInt(formData.adults) || 1,
       kids: parseInt(formData.kids) || 0,
       otherPersons: formData.otherPersons || [],
-      selectedRooms: formData.selectedRooms || [],
+      selectedRooms: selectedRooms,
       country: formData.country || "",
-      countryCode: formData.countryCode || ""
+      countryCode: formData.countryCode || "",
+      totalAmount: totalAmount,
+      paidAmount: parseFloat(formData.paidAmount || 0),
+      paymentMethod: formData.paymentMethod || "",
+      paymentNotes: formData.paymentNotes || ""
     };
 
     // Validate required fields
@@ -193,20 +294,26 @@ router.put("/:id", async (req, res) => {
         console.log("Vacated rooms:", roomsToVacate);
       }
 
-      // Mark new rooms as booked
+      // Mark new rooms as occupied
       if (newRooms.length > 0) {
         await Room.updateMany(
           { RoomNo: { $in: newRooms } },
-          { $set: { RStatus: "Booked" } }
+          { $set: { RStatus: "Occupied" } }
         );
-        console.log("Booked rooms:", newRooms);
+        console.log("Occupied rooms:", newRooms);
       }
     }
 
     res.json({ 
       success: true,
       message: "Reservation updated successfully", 
-      updatedReservation 
+      reservation: {
+        _id: updatedReservation._id,
+        totalAmount: updatedReservation.totalAmount,
+        paidAmount: updatedReservation.paidAmount,
+        amountDue: updatedReservation.totalAmount - updatedReservation.paidAmount,
+        status: updatedReservation.status
+      }
     });
 
   } catch (err) {
@@ -260,13 +367,13 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// ✅ Checkout endpoint
+// ✅ Checkout endpoint - UPDATED
 router.put("/:id/checkout", async (req, res) => {
   try {
     const reservation = await Reservation.findByIdAndUpdate(
       req.params.id,
       { 
-        status: "checked_out",
+        status: "CheckedOut",
         checkoutDate: new Date()
       },
       { new: true }
@@ -274,6 +381,14 @@ router.put("/:id/checkout", async (req, res) => {
 
     if (!reservation) {
       return res.status(404).json({ message: "Reservation not found" });
+    }
+
+    // Mark rooms as Vacant when checking out
+    if (reservation.selectedRooms && reservation.selectedRooms.length > 0) {
+      await Room.updateMany(
+        { RoomNo: { $in: reservation.selectedRooms } },
+        { $set: { RStatus: "Vacant" } }
+      );
     }
 
     res.json({ message: "Guest checked out successfully", reservation });
@@ -286,11 +401,69 @@ router.put("/:id/checkout", async (req, res) => {
 // ✅ Get payments for a reservation
 router.get("/:id/payments", async (req, res) => {
   try {
-    // This assumes you have a Payment model or payments are stored in the reservation
-    // Adjust according to your payment storage structure
-    const payments = []; // Replace with actual payment fetching logic
-    res.json(payments);
+    const reservation = await Reservation.findById(req.params.id);
+    if (!reservation) {
+      return res.status(404).json({ message: "Reservation not found" });
+    }
+
+    // Return payment information from the reservation
+    const paymentInfo = {
+      totalAmount: reservation.totalAmount,
+      paidAmount: reservation.paidAmount,
+      amountDue: reservation.totalAmount - reservation.paidAmount,
+      paymentMethod: reservation.paymentMethod,
+      paymentNotes: reservation.paymentNotes,
+      paymentStatus: reservation.paymentStatus
+    };
+
+    res.json(paymentInfo);
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ✅ NEW: Add payment to reservation
+router.post("/:id/payments", async (req, res) => {
+  try {
+    const { amount, paymentMethod, notes } = req.body;
+    const reservation = await Reservation.findById(req.params.id);
+    
+    if (!reservation) {
+      return res.status(404).json({ message: "Reservation not found" });
+    }
+
+    const newPaidAmount = reservation.paidAmount + parseFloat(amount);
+    
+    // Validate payment amount
+    if (newPaidAmount > reservation.totalAmount) {
+      return res.status(400).json({ 
+        message: "Payment amount exceeds total amount due" 
+      });
+    }
+
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+      req.params.id,
+      {
+        paidAmount: newPaidAmount,
+        paymentMethod: paymentMethod || reservation.paymentMethod,
+        paymentNotes: notes || reservation.paymentNotes,
+        paymentStatus: newPaidAmount >= reservation.totalAmount ? 'Captured' : 'Pending'
+      },
+      { new: true }
+    );
+
+    res.json({
+      message: "Payment added successfully",
+      reservation: {
+        totalAmount: updatedReservation.totalAmount,
+        paidAmount: updatedReservation.paidAmount,
+        amountDue: updatedReservation.totalAmount - updatedReservation.paidAmount,
+        paymentStatus: updatedReservation.paymentStatus
+      }
+    });
+
+  } catch (err) {
+    console.error("Error adding payment:", err);
     res.status(500).json({ message: err.message });
   }
 });
