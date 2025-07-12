@@ -219,7 +219,7 @@ router.put("/:id", async (req, res) => {
       totalAmount = await Reservation.calculateTotal(selectedRooms, duration);
     }
 
-    // Prepare update data with proper validation
+    // Prepare update data with proper validation - FIXED PAYMENT METHOD HANDLING
     const updateData = {
       firstName: formData.firstName?.trim(),
       middleName: formData.middleName?.trim() || "",
@@ -227,10 +227,9 @@ router.put("/:id", async (req, res) => {
       mobile: formData.mobile?.trim(),
       email: formData.email?.trim() || "",
       dob: formData.dob || "",
-      address: formData.address?.trim() || "",
+      address: formData.address?.trim() || "Not provided", // Required field
       city: formData.city?.trim() || "",
-      gender: formData.gender || "",
-      idType: formData.idType || "",
+      idType: formData.idType || "Passport", // Required field with enum
       idNumber: formData.idNumber?.trim() || "",
       checkIn: new Date(formData.checkIn),
       checkOut: new Date(formData.checkOut),
@@ -241,11 +240,26 @@ router.put("/:id", async (req, res) => {
       selectedRooms: selectedRooms,
       country: formData.country || "",
       countryCode: formData.countryCode || "",
-      totalAmount: totalAmount,
-      paidAmount: parseFloat(formData.paidAmount || 0),
-      paymentMethod: formData.paymentMethod || "",
-      paymentNotes: formData.paymentNotes || ""
+      totalAmount: totalAmount || 0,
+      paidAmount: parseFloat(formData.paidAmount || 0)
     };
+
+    // Handle gender enum - only set if valid
+    if (formData.gender && ['Male', 'Female', 'Other'].includes(formData.gender)) {
+      updateData.gender = formData.gender;
+    }
+
+    // Handle payment method enum - only set if valid and not empty
+    const validPaymentMethods = ['Cash', 'Credit Card', 'Debit Card', 'Bank Transfer', 'UPI', 'Other'];
+    if (formData.paymentMethod && validPaymentMethods.includes(formData.paymentMethod)) {
+      updateData.paymentMethod = formData.paymentMethod;
+    }
+    // Don't set paymentMethod at all if it's empty or invalid
+
+    // Handle payment notes - only set if not empty
+    if (formData.paymentNotes && formData.paymentNotes.trim() !== "") {
+      updateData.paymentNotes = formData.paymentNotes.trim();
+    }
 
     // Validate required fields
     if (!updateData.firstName || !updateData.mobile || !updateData.checkIn || !updateData.checkOut) {
@@ -261,10 +275,10 @@ router.put("/:id", async (req, res) => {
     const originalRooms = existingReservation.selectedRooms || [];
     const newRooms = updateData.selectedRooms || [];
 
-    // Update the reservation
+    // Update the reservation using $set to only update provided fields
     const updatedReservation = await Reservation.findByIdAndUpdate(
       reservationId,
-      updateData,
+      { $set: updateData }, // Use $set to only update provided fields
       { 
         new: true, // Return updated document
         runValidators: true // Run mongoose validations
