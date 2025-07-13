@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 
 const roomSchema = new mongoose.Schema({
@@ -28,6 +27,8 @@ const roomSchema = new mongoose.Schema({
         required: true,
         min: 0
     }
+
+    
 }, { timestamps: true });
 
 module.exports = mongoose.model('Room', roomSchema);
