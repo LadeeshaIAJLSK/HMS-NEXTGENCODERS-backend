@@ -60,18 +60,32 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Get single reservation
+// ✅ Get single reservation with room details
 router.get("/:id", async (req, res) => {
   try {
     const reservation = await Reservation.findById(req.params.id);
-    if (!reservation) return res.status(404).json({ message: "Reservation not found" });
-    res.json(reservation);
+    if (!reservation) {
+      return res.status(404).json({ message: "Reservation not found" });
+    }
+
+    // Fetch room details for the reserved rooms
+    let roomDetails = [];
+    if (reservation.selectedRooms && reservation.selectedRooms.length > 0) {
+      roomDetails = await Room.find({ 
+        RoomNo: { $in: reservation.selectedRooms } 
+      });
+    }
+
+    res.json({
+      ...reservation.toObject(),
+      roomDetails: roomDetails
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ Submit reservation (Create) - UPDATED WITH PRICE CALCULATION
+// ✅ Submit reservation (Create)
 router.post("/", upload.array("idFiles"), async (req, res) => {
   try {
     const formData = req.body;
@@ -140,6 +154,7 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
       paidAmount: parseFloat(formData.advancePayment || formData.paidAmount || 0),
       paymentMethod: formData.paymentMethod || "",
       paymentNotes: formData.paymentNotes || "",
+      paymentStatus: 'Pending',
       
       // Set status to Confirmed
       status: "Confirmed"
@@ -152,7 +167,7 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
 
     console.log("Reservation saved:", saved._id);
 
-    // Book rooms - Update status to 'Occupied' instead of 'Booked'
+    // Book rooms - Update status to 'Occupied'
     await Room.updateMany(
       { RoomNo: { $in: selectedRooms } },
       { $set: { RStatus: "Occupied" } }
@@ -185,7 +200,7 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
   }
 });
 
-// ✅ FIXED Update reservation - Handle JSON data properly WITH PRICE CALCULATION
+// ✅ Update reservation
 router.put("/:id", async (req, res) => {
   try {
     console.log("Update request received for ID:", req.params.id);
@@ -227,10 +242,9 @@ router.put("/:id", async (req, res) => {
       mobile: formData.mobile?.trim(),
       email: formData.email?.trim() || "",
       dob: formData.dob || "",
-      address: formData.address?.trim() || "",
+      address: formData.address?.trim() || "Not provided",
       city: formData.city?.trim() || "",
-      gender: formData.gender || "",
-      idType: formData.idType || "",
+      idType: formData.idType || "Passport",
       idNumber: formData.idNumber?.trim() || "",
       checkIn: new Date(formData.checkIn),
       checkOut: new Date(formData.checkOut),
@@ -241,11 +255,25 @@ router.put("/:id", async (req, res) => {
       selectedRooms: selectedRooms,
       country: formData.country || "",
       countryCode: formData.countryCode || "",
-      totalAmount: totalAmount,
-      paidAmount: parseFloat(formData.paidAmount || 0),
-      paymentMethod: formData.paymentMethod || "",
-      paymentNotes: formData.paymentNotes || ""
+      totalAmount: totalAmount || 0,
+      paidAmount: parseFloat(formData.paidAmount || 0)
     };
+
+    // Handle gender enum - only set if valid
+    if (formData.gender && ['Male', 'Female', 'Other'].includes(formData.gender)) {
+      updateData.gender = formData.gender;
+    }
+
+    // Handle payment method enum - only set if valid and not empty
+    const validPaymentMethods = ['Cash', 'Credit Card', 'Debit Card', 'Bank Transfer', 'UPI', 'Other'];
+    if (formData.paymentMethod && validPaymentMethods.includes(formData.paymentMethod)) {
+      updateData.paymentMethod = formData.paymentMethod;
+    }
+
+    // Handle payment notes - only set if not empty
+    if (formData.paymentNotes && formData.paymentNotes.trim() !== "") {
+      updateData.paymentNotes = formData.paymentNotes.trim();
+    }
 
     // Validate required fields
     if (!updateData.firstName || !updateData.mobile || !updateData.checkIn || !updateData.checkOut) {
@@ -264,10 +292,10 @@ router.put("/:id", async (req, res) => {
     // Update the reservation
     const updatedReservation = await Reservation.findByIdAndUpdate(
       reservationId,
-      updateData,
+      { $set: updateData },
       { 
-        new: true, // Return updated document
-        runValidators: true // Run mongoose validations
+        new: true,
+        runValidators: true
       }
     );
 
@@ -367,15 +395,28 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// ✅ Checkout endpoint - UPDATED
+// ✅ Checkout endpoint with payment status tracking
 router.put("/:id/checkout", async (req, res) => {
   try {
+    const { paymentStatus, paidAmount, totalAmount } = req.body;
+    
+    const updateData = { 
+      status: "CheckedOut",
+      checkoutDate: new Date(),
+      paymentStatus: paymentStatus || 'Pending'
+    };
+
+    // Update payment fields if provided
+    if (paidAmount !== undefined) {
+      updateData.paidAmount = paidAmount;
+    }
+    if (totalAmount !== undefined) {
+      updateData.totalAmount = totalAmount;
+    }
+
     const reservation = await Reservation.findByIdAndUpdate(
       req.params.id,
-      { 
-        status: "CheckedOut",
-        checkoutDate: new Date()
-      },
+      updateData,
       { new: true }
     );
 
@@ -391,7 +432,12 @@ router.put("/:id/checkout", async (req, res) => {
       );
     }
 
-    res.json({ message: "Guest checked out successfully", reservation });
+    res.json({ 
+      message: "Guest checked out successfully", 
+      reservation,
+      paymentStatus: reservation.paymentStatus,
+      amountDue: reservation.totalAmount - reservation.paidAmount
+    });
   } catch (err) {
     console.error("Error during checkout:", err);
     res.status(500).json({ message: err.message });
@@ -422,38 +468,72 @@ router.get("/:id/payments", async (req, res) => {
   }
 });
 
-// ✅ NEW: Add payment to reservation
+// ✅ Add payment to reservation
 router.post("/:id/payments", async (req, res) => {
   try {
-    const { amount, paymentMethod, notes } = req.body;
+    const { amount, paymentMethod, notes, cashReceived, change } = req.body;
     const reservation = await Reservation.findById(req.params.id);
     
     if (!reservation) {
       return res.status(404).json({ message: "Reservation not found" });
     }
 
-    const newPaidAmount = reservation.paidAmount + parseFloat(amount);
+    const paymentAmount = parseFloat(amount);
+    const newPaidAmount = reservation.paidAmount + paymentAmount;
     
     // Validate payment amount
+    if (paymentAmount <= 0) {
+      return res.status(400).json({ 
+        message: "Payment amount must be greater than 0" 
+      });
+    }
+
     if (newPaidAmount > reservation.totalAmount) {
       return res.status(400).json({ 
         message: "Payment amount exceeds total amount due" 
       });
     }
 
+    // Prepare update data
+    const updateData = {
+      paidAmount: newPaidAmount,
+      paymentStatus: newPaidAmount >= reservation.totalAmount ? 'Captured' : 'Pending'
+    };
+
+    // Update payment method if provided
+    if (paymentMethod) {
+      updateData.paymentMethod = paymentMethod;
+    }
+
+    // Update payment notes if provided
+    if (notes) {
+      updateData.paymentNotes = notes;
+    }
+
+    // Store cash handling details if provided
+    if (cashReceived !== undefined) {
+      updateData.cashReceived = parseFloat(cashReceived);
+    }
+    if (change !== undefined) {
+      updateData.change = parseFloat(change);
+    }
+
     const updatedReservation = await Reservation.findByIdAndUpdate(
       req.params.id,
-      {
-        paidAmount: newPaidAmount,
-        paymentMethod: paymentMethod || reservation.paymentMethod,
-        paymentNotes: notes || reservation.paymentNotes,
-        paymentStatus: newPaidAmount >= reservation.totalAmount ? 'Captured' : 'Pending'
-      },
+      updateData,
       { new: true }
     );
 
     res.json({
       message: "Payment added successfully",
+      payment: {
+        amount: paymentAmount,
+        method: paymentMethod,
+        notes: notes,
+        cashReceived: cashReceived,
+        change: change,
+        date: new Date()
+      },
       reservation: {
         totalAmount: updatedReservation.totalAmount,
         paidAmount: updatedReservation.paidAmount,
