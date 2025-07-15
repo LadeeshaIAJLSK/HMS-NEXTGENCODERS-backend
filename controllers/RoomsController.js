@@ -1,4 +1,4 @@
-const Room = require("../models/RoomsModels");
+const Room = require("../models/RoomsModel");
 
 exports.getPosts = (req, res) => {
   res.send('Posts from controller');
