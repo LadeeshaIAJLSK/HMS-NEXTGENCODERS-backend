@@ -5,6 +5,8 @@ const postRoutes = require("./routes/posts");
 const roomRoutes = require("./routes/rooms");
 const reservationRoutes = require("./routes/reservation");
 const guestRoutes = require("./routes/guestRoutes");
+const packageRoutes = require("./routes/packages"); 
+const dailyDataRoutes = require('./routes/dailyData');
 
 
 
@@ -26,6 +28,8 @@ app.use("/api/posts", postRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/reservations", reservationRoutes);// Add this line to use the room routes
 app.use('/api/guests', guestRoutes);
+app.use('/api/packages', packageRoutes);
+app.use('/api/daily-data', dailyDataRoutes);
 //i changes this
 
 
