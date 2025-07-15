@@ -1,5 +1,5 @@
 // controllers/receptionController.js
-const Reception = require("../models/ReceptionModels");
+const Reception = require("../models/ReceptionModel");
 
 exports.getLatestReception = async (req, res) => {
   try {

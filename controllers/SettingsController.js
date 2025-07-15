@@ -1,4 +1,4 @@
-const Setting = require('../models/SettingsModels');
+const Setting = require('../models/SettingsModel');
 
 // GET: Fetch hotel settings
 exports.getSettings = async (req, res) => {

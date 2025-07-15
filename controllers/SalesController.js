@@ -1,4 +1,4 @@
-const SalesData = require('../models/SalesModels');
+const SalesData = require('../models/SalesModel');
 
 // GET: Fetch sales data by period
 exports.getSalesByPeriod = async (req, res) => {
