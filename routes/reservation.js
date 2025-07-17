@@ -6,6 +6,9 @@ const path = require("path");
 const Reservation = require("../models/Reservation");
 const Room = require("../models/posts"); // Room model
 
+// ADD THIS: Import Package model for day-out reservations
+const Package = require("../models/Package"); // Adjust path as needed
+
 // Multer config for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -31,18 +34,38 @@ router.get("/available-rooms", async (req, res) => {
   }
 });
 
-// ✅ Search reservations
+// ADD THIS: Get available packages endpoint
+router.get("/available-packages", async (req, res) => {
+  try {
+    const packages = await Package.find();
+    res.json({ packages });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ✅ Search reservations - MINIMAL UPDATE
 router.get("/search", async (req, res) => {
   try {
-    const term = req.query.term;
-    const results = await Reservation.find({
+    const { term, type } = req.query; // ADD: type parameter
+    
+    let searchQuery = {
       $or: [
         { firstName: { $regex: term, $options: "i" } },
         { surname: { $regex: term, $options: "i" } },
         { mobile: { $regex: term } },
         { idNumber: { $regex: term } },
       ],
-    }).sort({ createdAt: -1 });
+    };
+
+    // ADD: Filter by reservation type if specified
+    if (type && ['room', 'dayOut'].includes(type)) {
+      searchQuery.reservationType = type;
+    }
+
+    const results = await Reservation.find(searchQuery)
+      .populate('selectedPackages') // ADD: Populate packages for day-out
+      .sort({ createdAt: -1 });
 
     res.json(results);
   } catch (err) {
@@ -50,42 +73,61 @@ router.get("/search", async (req, res) => {
   }
 });
 
-// ✅ Get all reservations
+// ✅ Get all reservations - MINIMAL UPDATE
 router.get("/", async (req, res) => {
   try {
-    const reservations = await Reservation.find().sort({ createdAt: -1 });
+    const { type } = req.query; // ADD: type parameter
+    
+    let query = {};
+    if (type && ['room', 'dayOut'].includes(type)) {
+      query.reservationType = type;
+    }
+
+    const reservations = await Reservation.find(query)
+      .populate('selectedPackages') // ADD: Populate packages
+      .sort({ createdAt: -1 });
+    
     res.json(reservations);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ Get single reservation with room details
+// ✅ Get single reservation with room details - ENHANCED
 router.get("/:id", async (req, res) => {
   try {
-    const reservation = await Reservation.findById(req.params.id);
+    const reservation = await Reservation.findById(req.params.id)
+      .populate('selectedPackages'); // ADD: Populate packages
+
     if (!reservation) {
       return res.status(404).json({ message: "Reservation not found" });
     }
 
-    // Fetch room details for the reserved rooms
-    let roomDetails = [];
-    if (reservation.selectedRooms && reservation.selectedRooms.length > 0) {
-      roomDetails = await Room.find({ 
+    let additionalDetails = {};
+
+    // Fetch room details for room reservations
+    if (reservation.reservationType === 'room' && reservation.selectedRooms && reservation.selectedRooms.length > 0) {
+      const roomDetails = await Room.find({ 
         RoomNo: { $in: reservation.selectedRooms } 
       });
+      additionalDetails.roomDetails = roomDetails;
+    }
+
+    // Package details are already populated
+    if (reservation.reservationType === 'dayOut') {
+      additionalDetails.packageDetails = reservation.selectedPackages;
     }
 
     res.json({
       ...reservation.toObject(),
-      roomDetails: roomDetails
+      ...additionalDetails
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ Submit reservation (Create)
+// ✅ Submit reservation (Create) - ENHANCED FOR BOTH TYPES
 router.post("/", upload.array("idFiles"), async (req, res) => {
   try {
     const formData = req.body;
@@ -93,65 +135,125 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
 
     console.log("Form data received:", formData);
 
+    // Determine reservation type - DEFAULT TO 'room' for backward compatibility
+    const reservationType = formData.reservationType || 'room';
+
     const otherPersons = JSON.parse(formData.otherPersons || "[]");
     const selectedRooms = JSON.parse(formData.selectedRooms || "[]");
+    const selectedPackages = JSON.parse(formData.selectedPackages || "[]"); // ADD
 
-    // Validate required fields
-    if (!formData.checkIn || !formData.checkOut || !formData.firstName || !formData.mobile) {
+    // Validate required fields based on type
+    if (!formData.firstName || !formData.mobile) {
       return res.status(400).json({ 
-        message: "Missing required fields: checkIn, checkOut, firstName, mobile" 
+        message: "Missing required fields: firstName, mobile" 
       });
     }
 
-    if (selectedRooms.length === 0) {
-      return res.status(400).json({ 
-        message: "At least one room must be selected" 
-      });
+    // Type-specific validation
+    if (reservationType === 'room') {
+      // EXISTING room validation
+      if (!formData.checkIn || !formData.checkOut) {
+        return res.status(400).json({ 
+          message: "Missing required fields: checkIn, checkOut" 
+        });
+      }
+
+      if (selectedRooms.length === 0) {
+        return res.status(400).json({ 
+          message: "At least one room must be selected" 
+        });
+      }
+    } else if (reservationType === 'dayOut') {
+      // NEW day-out validation
+      if (!formData.checkIn || !formData.startTime || !formData.endTime) {
+        return res.status(400).json({ 
+          message: "Missing required fields for day-out: checkIn (date), startTime, endTime" 
+        });
+      }
+
+      if (selectedPackages.length === 0) {
+        return res.status(400).json({ 
+          message: "At least one package must be selected for day-out reservation" 
+        });
+      }
     }
 
-    // Calculate duration
-    const checkInDate = new Date(formData.checkIn);
-    const checkOutDate = new Date(formData.checkOut);
-    const duration = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+    // Calculate duration and dates
+    let checkInDate = new Date(formData.checkIn);
+    let checkOutDate, duration;
 
-    if (duration <= 0) {
-      return res.status(400).json({ 
-        message: "Check-out date must be after check-in date" 
-      });
+    if (reservationType === 'room') {
+      // EXISTING room logic
+      checkOutDate = new Date(formData.checkOut);
+      duration = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+
+      if (duration <= 0) {
+        return res.status(400).json({ 
+          message: "Check-out date must be after check-in date" 
+        });
+      }
+    } else if (reservationType === 'dayOut') {
+      // NEW day-out logic
+      checkOutDate = checkInDate; // Same day
+      
+      if (formData.startTime && formData.endTime) {
+        const start = new Date(`${checkInDate.toISOString().split('T')[0]}T${formData.startTime}`);
+        const end = new Date(`${checkInDate.toISOString().split('T')[0]}T${formData.endTime}`);
+        duration = Math.ceil((end - start) / (1000 * 60 * 60));
+        
+        if (duration <= 0) {
+          return res.status(400).json({ 
+            message: "End time must be after start time" 
+          });
+        }
+      }
     }
 
-    // Calculate total amount using the static method from the model
-    const totalAmount = await Reservation.calculateTotal(selectedRooms, duration);
+    // Calculate total amount - ENHANCED
+    let totalAmount = 0;
+    const adults = parseInt(formData.adults) || 1;
+    const kids = parseInt(formData.kids) || 0;
+
+    if (reservationType === 'room') {
+      // EXISTING room calculation
+      totalAmount = await Reservation.calculateTotal('room', selectedRooms, duration);
+    } else if (reservationType === 'dayOut') {
+      // NEW package calculation
+      totalAmount = await Reservation.calculateTotal('dayOut', selectedPackages, duration, adults, kids);
+    }
 
     console.log("Calculated total amount:", totalAmount);
 
-    // Prepare reservation data
+    // Prepare reservation data - ENHANCED
     const reservationData = {
+      reservationType: reservationType, // ADD
       checkIn: checkInDate,
       checkOut: checkOutDate,
       duration: duration,
-      adults: parseInt(formData.adults) || 1,
-      kids: parseInt(formData.kids) || 0,
+      adults: adults,
+      kids: kids,
       firstName: formData.firstName,
       middleName: formData.middleName || "",
       surname: formData.surname || "",
       mobile: formData.mobile,
       email: formData.email || "",
       dob: formData.dob ? new Date(formData.dob) : null,
-      address: formData.address,
+      address: formData.address || "", // Make optional for day-out
       city: formData.city || "",
       gender: formData.gender || "",
-      idType: formData.idType,
-      idNumber: formData.idNumber,
+      idType: formData.idType || "Passport",
+      idNumber: formData.idNumber || "", // Make optional for day-out
       country: formData.country || "",
       countryCode: formData.countryCode || "",
       otherPersons: otherPersons,
-      selectedRooms: selectedRooms,
+      selectedRooms: selectedRooms, // Will be empty for day-out
+      selectedPackages: selectedPackages, // ADD: Will be empty for room
       idFiles: files.map((file) => file.path),
       
       // Payment fields
       totalAmount: totalAmount,
       paidAmount: parseFloat(formData.advancePayment || formData.paidAmount || 0),
+      advancePayment: parseFloat(formData.advancePayment || 0), // ADD
       paymentMethod: formData.paymentMethod || "",
       paymentNotes: formData.paymentNotes || "",
       paymentStatus: 'Pending',
@@ -160,6 +262,12 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
       status: "Confirmed"
     };
 
+    // ADD day-out specific fields
+    if (reservationType === 'dayOut') {
+      reservationData.startTime = formData.startTime;
+      reservationData.endTime = formData.endTime;
+    }
+
     console.log("Creating reservation with data:", reservationData);
 
     const reservation = new Reservation(reservationData);
@@ -167,26 +275,31 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
 
     console.log("Reservation saved:", saved._id);
 
-    // Book rooms - Update status to 'Occupied'
-    await Room.updateMany(
-      { RoomNo: { $in: selectedRooms } },
-      { $set: { RStatus: "Occupied" } }
-    );
+    // Book rooms - ONLY for room reservations
+    if (reservationType === 'room' && selectedRooms.length > 0) {
+      await Room.updateMany(
+        { RoomNo: { $in: selectedRooms } },
+        { $set: { RStatus: "Occupied" } }
+      );
+      console.log("Rooms updated to Occupied:", selectedRooms);
+    }
 
-    console.log("Rooms updated to Occupied:", selectedRooms);
-
-    // Return success response with amount details
+    // Return success response with amount details - ENHANCED
     res.status(201).json({
-      message: "Reservation created successfully",
+      message: `${reservationType === 'room' ? 'Room' : 'Day-out'} reservation created successfully`,
       reservation: {
         _id: saved._id,
+        reservationType: saved.reservationType, // ADD
         totalAmount: saved.totalAmount,
         paidAmount: saved.paidAmount,
         amountDue: saved.totalAmount - saved.paidAmount,
         status: saved.status,
         selectedRooms: saved.selectedRooms,
+        selectedPackages: saved.selectedPackages, // ADD
         checkIn: saved.checkIn,
         checkOut: saved.checkOut,
+        startTime: saved.startTime, // ADD
+        endTime: saved.endTime, // ADD
         duration: saved.duration
       }
     });
@@ -200,7 +313,7 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
   }
 });
 
-// ✅ Update reservation
+// ✅ Update reservation - ENHANCED FOR BOTH TYPES
 router.put("/:id", async (req, res) => {
   try {
     console.log("Update request received for ID:", req.params.id);
@@ -218,23 +331,47 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    // Calculate duration if dates are provided
+    const reservationType = existingReservation.reservationType || 'room'; // ADD
+
+    // Calculate duration based on type - ENHANCED
     let duration = parseInt(formData.duration);
-    if (formData.checkIn && formData.checkOut) {
-      const checkInDate = new Date(formData.checkIn);
-      const checkOutDate = new Date(formData.checkOut);
-      duration = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
-    }
-
-    // Calculate total amount if rooms or duration changed
-    let totalAmount = formData.totalAmount;
-    const selectedRooms = formData.selectedRooms || [];
     
-    if (selectedRooms.length > 0 && duration > 0) {
-      totalAmount = await Reservation.calculateTotal(selectedRooms, duration);
+    if (reservationType === 'room') {
+      // EXISTING room logic
+      if (formData.checkIn && formData.checkOut) {
+        const checkInDate = new Date(formData.checkIn);
+        const checkOutDate = new Date(formData.checkOut);
+        duration = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+      }
+    } else if (reservationType === 'dayOut') {
+      // NEW day-out logic
+      if (formData.startTime && formData.endTime && formData.checkIn) {
+        const start = new Date(`${formData.checkIn.split('T')[0]}T${formData.startTime}`);
+        const end = new Date(`${formData.checkIn.split('T')[0]}T${formData.endTime}`);
+        duration = Math.ceil((end - start) / (1000 * 60 * 60));
+      }
     }
 
-    // Prepare update data with proper validation
+    // Calculate total amount - ENHANCED
+    let totalAmount = formData.totalAmount;
+    const adults = parseInt(formData.adults) || 1;
+    const kids = parseInt(formData.kids) || 0;
+
+    if (reservationType === 'room') {
+      // EXISTING room calculation
+      const selectedRooms = formData.selectedRooms || [];
+      if (selectedRooms.length > 0 && duration > 0) {
+        totalAmount = await Reservation.calculateTotal('room', selectedRooms, duration);
+      }
+    } else if (reservationType === 'dayOut') {
+      // NEW package calculation
+      const selectedPackages = formData.selectedPackages || [];
+      if (selectedPackages.length > 0 && duration > 0) {
+        totalAmount = await Reservation.calculateTotal('dayOut', selectedPackages, duration, adults, kids);
+      }
+    }
+
+    // Prepare update data with proper validation - ENHANCED
     const updateData = {
       firstName: formData.firstName?.trim(),
       middleName: formData.middleName?.trim() || "",
@@ -242,22 +379,32 @@ router.put("/:id", async (req, res) => {
       mobile: formData.mobile?.trim(),
       email: formData.email?.trim() || "",
       dob: formData.dob || "",
-      address: formData.address?.trim() || "Not provided",
+      address: formData.address?.trim() || "", // Make optional
       city: formData.city?.trim() || "",
       idType: formData.idType || "Passport",
-      idNumber: formData.idNumber?.trim() || "",
+      idNumber: formData.idNumber?.trim() || "", // Make optional
       checkIn: new Date(formData.checkIn),
-      checkOut: new Date(formData.checkOut),
       duration: duration,
-      adults: parseInt(formData.adults) || 1,
-      kids: parseInt(formData.kids) || 0,
+      adults: adults,
+      kids: kids,
       otherPersons: formData.otherPersons || [],
-      selectedRooms: selectedRooms,
       country: formData.country || "",
       countryCode: formData.countryCode || "",
       totalAmount: totalAmount || 0,
-      paidAmount: parseFloat(formData.paidAmount || 0)
+      paidAmount: parseFloat(formData.paidAmount || 0),
+      advancePayment: parseFloat(formData.advancePayment || 0) // ADD
     };
+
+    // ADD type-specific fields
+    if (reservationType === 'room') {
+      updateData.checkOut = new Date(formData.checkOut);
+      updateData.selectedRooms = formData.selectedRooms || [];
+    } else if (reservationType === 'dayOut') {
+      updateData.checkOut = new Date(formData.checkIn); // Same day
+      updateData.selectedPackages = formData.selectedPackages || [];
+      updateData.startTime = formData.startTime;
+      updateData.endTime = formData.endTime;
+    }
 
     // Handle gender enum - only set if valid
     if (formData.gender && ['Male', 'Female', 'Other'].includes(formData.gender)) {
@@ -275,19 +422,44 @@ router.put("/:id", async (req, res) => {
       updateData.paymentNotes = formData.paymentNotes.trim();
     }
 
-    // Validate required fields
-    if (!updateData.firstName || !updateData.mobile || !updateData.checkIn || !updateData.checkOut) {
+    // Validate required fields - UPDATED
+    const requiredCheckOut = reservationType === 'room';
+    if (!updateData.firstName || !updateData.mobile || !updateData.checkIn || (requiredCheckOut && !updateData.checkOut)) {
       return res.status(400).json({ 
         success: false,
-        message: "Missing required fields: firstName, mobile, checkIn, checkOut" 
+        message: `Missing required fields: firstName, mobile, checkIn${requiredCheckOut ? ', checkOut' : ''}` 
       });
     }
 
     console.log("Prepared update data:", updateData);
 
-    // Get original rooms to update their status later
-    const originalRooms = existingReservation.selectedRooms || [];
-    const newRooms = updateData.selectedRooms || [];
+    // Get original rooms to update their status later - ONLY for room reservations
+    if (reservationType === 'room') {
+      const originalRooms = existingReservation.selectedRooms || [];
+      const newRooms = updateData.selectedRooms || [];
+
+      // Update room statuses if rooms changed
+      if (JSON.stringify(originalRooms.sort()) !== JSON.stringify(newRooms.sort())) {
+        console.log("Updating room statuses...");
+        
+        const roomsToVacate = originalRooms.filter(room => !newRooms.includes(room));
+        if (roomsToVacate.length > 0) {
+          await Room.updateMany(
+            { RoomNo: { $in: roomsToVacate } },
+            { $set: { RStatus: "Vacant" } }
+          );
+          console.log("Vacated rooms:", roomsToVacate);
+        }
+
+        if (newRooms.length > 0) {
+          await Room.updateMany(
+            { RoomNo: { $in: newRooms } },
+            { $set: { RStatus: "Occupied" } }
+          );
+          console.log("Occupied rooms:", newRooms);
+        }
+      }
+    }
 
     // Update the reservation
     const updatedReservation = await Reservation.findByIdAndUpdate(
@@ -308,35 +480,12 @@ router.put("/:id", async (req, res) => {
 
     console.log("Successfully updated reservation:", updatedReservation._id);
 
-    // Update room statuses if rooms changed
-    if (JSON.stringify(originalRooms.sort()) !== JSON.stringify(newRooms.sort())) {
-      console.log("Updating room statuses...");
-      
-      // Mark old rooms as vacant (if they're not in the new selection)
-      const roomsToVacate = originalRooms.filter(room => !newRooms.includes(room));
-      if (roomsToVacate.length > 0) {
-        await Room.updateMany(
-          { RoomNo: { $in: roomsToVacate } },
-          { $set: { RStatus: "Vacant" } }
-        );
-        console.log("Vacated rooms:", roomsToVacate);
-      }
-
-      // Mark new rooms as occupied
-      if (newRooms.length > 0) {
-        await Room.updateMany(
-          { RoomNo: { $in: newRooms } },
-          { $set: { RStatus: "Occupied" } }
-        );
-        console.log("Occupied rooms:", newRooms);
-      }
-    }
-
     res.json({ 
       success: true,
       message: "Reservation updated successfully", 
       reservation: {
         _id: updatedReservation._id,
+        reservationType: updatedReservation.reservationType, // ADD
         totalAmount: updatedReservation.totalAmount,
         paidAmount: updatedReservation.paidAmount,
         amountDue: updatedReservation.totalAmount - updatedReservation.paidAmount,
@@ -372,7 +521,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ✅ Delete reservation
+// ✅ Delete reservation - ENHANCED
 router.delete("/:id", async (req, res) => {
   try {
     const reservation = await Reservation.findByIdAndDelete(req.params.id);
@@ -380,28 +529,35 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ message: "Reservation not found" });
     }
 
-    // Mark rooms as Vacant when reservation is deleted
-    if (reservation.selectedRooms && reservation.selectedRooms.length > 0) {
+    // Mark rooms as Vacant when room reservation is deleted - ONLY for room reservations
+    if (reservation.reservationType === 'room' && reservation.selectedRooms && reservation.selectedRooms.length > 0) {
       await Room.updateMany(
         { RoomNo: { $in: reservation.selectedRooms } },
         { $set: { RStatus: "Vacant" } }
       );
     }
 
-    res.json({ message: "Reservation deleted successfully" });
+    res.json({ 
+      message: `${reservation.reservationType === 'room' ? 'Room' : 'Day-out'} reservation deleted successfully` 
+    });
   } catch (err) {
     console.error("Error deleting reservation:", err);
     res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ Checkout endpoint with payment status tracking
+// ✅ Checkout endpoint with payment status tracking - ENHANCED
 router.put("/:id/checkout", async (req, res) => {
   try {
     const { paymentStatus, paidAmount, totalAmount } = req.body;
     
+    const reservation = await Reservation.findById(req.params.id);
+    if (!reservation) {
+      return res.status(404).json({ message: "Reservation not found" });
+    }
+
     const updateData = { 
-      status: "CheckedOut",
+      status: reservation.reservationType === 'dayOut' ? 'Completed' : 'CheckedOut', // ENHANCED
       checkoutDate: new Date(),
       paymentStatus: paymentStatus || 'Pending'
     };
@@ -414,18 +570,14 @@ router.put("/:id/checkout", async (req, res) => {
       updateData.totalAmount = totalAmount;
     }
 
-    const reservation = await Reservation.findByIdAndUpdate(
+    const updatedReservation = await Reservation.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true }
     );
 
-    if (!reservation) {
-      return res.status(404).json({ message: "Reservation not found" });
-    }
-
-    // Mark rooms as Vacant when checking out
-    if (reservation.selectedRooms && reservation.selectedRooms.length > 0) {
+    // Mark rooms as Vacant when room reservation is checked out - ONLY for room reservations
+    if (reservation.reservationType === 'room' && reservation.selectedRooms && reservation.selectedRooms.length > 0) {
       await Room.updateMany(
         { RoomNo: { $in: reservation.selectedRooms } },
         { $set: { RStatus: "Vacant" } }
@@ -433,10 +585,10 @@ router.put("/:id/checkout", async (req, res) => {
     }
 
     res.json({ 
-      message: "Guest checked out successfully", 
-      reservation,
-      paymentStatus: reservation.paymentStatus,
-      amountDue: reservation.totalAmount - reservation.paidAmount
+      message: `${reservation.reservationType === 'room' ? 'Guest checked out' : 'Day-out completed'} successfully`, 
+      reservation: updatedReservation,
+      paymentStatus: updatedReservation.paymentStatus,
+      amountDue: updatedReservation.totalAmount - updatedReservation.paidAmount
     });
   } catch (err) {
     console.error("Error during checkout:", err);
@@ -444,7 +596,7 @@ router.put("/:id/checkout", async (req, res) => {
   }
 });
 
-// ✅ Get payments for a reservation
+// ✅ Get payments for a reservation - ENHANCED
 router.get("/:id/payments", async (req, res) => {
   try {
     const reservation = await Reservation.findById(req.params.id);
@@ -454,8 +606,10 @@ router.get("/:id/payments", async (req, res) => {
 
     // Return payment information from the reservation
     const paymentInfo = {
+      reservationType: reservation.reservationType, // ADD
       totalAmount: reservation.totalAmount,
       paidAmount: reservation.paidAmount,
+      advancePayment: reservation.advancePayment, // ADD
       amountDue: reservation.totalAmount - reservation.paidAmount,
       paymentMethod: reservation.paymentMethod,
       paymentNotes: reservation.paymentNotes,
@@ -468,7 +622,7 @@ router.get("/:id/payments", async (req, res) => {
   }
 });
 
-// ✅ Add payment to reservation
+// ✅ Add payment to reservation - MINIMAL UPDATE
 router.post("/:id/payments", async (req, res) => {
   try {
     const { amount, paymentMethod, notes, cashReceived, change } = req.body;
@@ -497,7 +651,7 @@ router.post("/:id/payments", async (req, res) => {
     // Prepare update data
     const updateData = {
       paidAmount: newPaidAmount,
-      paymentStatus: newPaidAmount >= reservation.totalAmount ? 'Captured' : 'Pending'
+      paymentStatus: newPaidAmount >= reservation.totalAmount ? 'Fully Paid' : 'Partially Paid' // UPDATED
     };
 
     // Update payment method if provided
@@ -535,6 +689,7 @@ router.post("/:id/payments", async (req, res) => {
         date: new Date()
       },
       reservation: {
+        reservationType: updatedReservation.reservationType, // ADD
         totalAmount: updatedReservation.totalAmount,
         paidAmount: updatedReservation.paidAmount,
         amountDue: updatedReservation.totalAmount - updatedReservation.paidAmount,
