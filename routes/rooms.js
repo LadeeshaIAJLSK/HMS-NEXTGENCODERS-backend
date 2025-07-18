@@ -1,6 +1,7 @@
-const express = require("express");
+import express from "express";
+import Room from "../models/RoomsModel.js"; // ✅ Correct path to Room model
+
 const router = express.Router();
-const Room = require("../models/posts");// ✅ Correct path to Room model
 
 // ✅ 1. Get ALL rooms for Reception module (view all, not just vacant)
 router.get("/rooms", async (req, res) => {
@@ -47,4 +48,4 @@ router.post("/reserve", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -1,4 +1,4 @@
-const express = require("express");//
+/*const express = require("express");//
 const mongoose = require("mongoose");//
 const cors = require("cors");
 const postRoutes = require("./routes/posts");
@@ -53,7 +53,7 @@ mongoose
     process.exit(1);
   });
 
-app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
+app.listen(port, () => console.log(`🚀 Server running on port ${port}`)); */
 
 
 

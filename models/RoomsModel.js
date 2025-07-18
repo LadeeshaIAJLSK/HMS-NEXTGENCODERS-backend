@@ -1,5 +1,4 @@
-
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const roomSchema = new mongoose.Schema({
     RoomNo: { 
@@ -30,4 +29,7 @@ const roomSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Room', roomSchema);
+// Use mongoose.models to avoid OverwriteModelError
+const Room = mongoose.models.Room || mongoose.model('Room', roomSchema);
+
+export default Room;

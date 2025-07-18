@@ -1,10 +1,11 @@
-const express = require("express");
+import express from "express";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+import Reservation from "../models/Reservation.js";
+import Room from "../models/RoomsModel.js"; // Room model
+
 const router = express.Router();
-const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
-const Reservation = require("../models/Reservation");
-const Room = require("../models/posts"); // Room model
 
 // Multer config for file uploads
 const storage = multer.diskStorage({
@@ -548,4 +549,4 @@ router.post("/:id/payments", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

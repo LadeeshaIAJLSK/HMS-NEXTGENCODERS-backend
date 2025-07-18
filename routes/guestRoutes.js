@@ -1,7 +1,8 @@
-const express = require('express');
+import express from 'express';
+import Reservation from '../models/Reservation.js';
+import { check, validationResult } from 'express-validator';
+
 const router = express.Router();
-const Reservation = require('../models/Reservation');
-const { check, validationResult } = require('express-validator');
 
 // Get all active reservations with filtering
 router.get('/', async (req, res) => {
@@ -216,7 +217,7 @@ router.delete('/hard/:id', async (req, res) => {
       return res.status(404).json({ msg: 'Reservation not found' });
     }
     
-    await reservation.remove();
+    await reservation.deleteOne();
     
     res.json({ msg: 'Reservation permanently deleted' });
   } catch (err) {
@@ -225,4 +226,4 @@ router.delete('/hard/:id', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

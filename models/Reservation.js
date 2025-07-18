@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const reservationSchema = new mongoose.Schema({
   // Booking Information
@@ -211,8 +211,8 @@ reservationSchema.methods.checkout = function(userId = null, notes = null) {
 // Update room statuses when reservation changes
 reservationSchema.post('save', async function(doc) {
   try {
-    // Import the Room model - adjust the path to match your project structure
-    const Room = require('./posts'); // This should match your Room model file
+    // Use mongoose.models to avoid re-compilation error
+    const Room = mongoose.models.Room || (await import('./RoomsModel.js')).default;
     
     if (doc.status === 'Confirmed' || doc.status === 'CheckedIn') {
       await Room.updateMany(
@@ -233,8 +233,8 @@ reservationSchema.post('save', async function(doc) {
 // Static method to calculate total amount
 reservationSchema.statics.calculateTotal = async function(roomNos, duration) {
   try {
-    // Import the Room model - adjust the path to match your project structure
-    const Room = require('./posts'); // This should match your Room model file
+    // Use mongoose.models to avoid re-compilation error
+    const Room = mongoose.models.Room || (await import('./RoomsModel.js')).default;
     
     console.log('Calculating total for rooms:', roomNos, 'duration:', duration);
     
@@ -313,4 +313,7 @@ reservationSchema.index({ paymentStatus: 1 });
 reservationSchema.index({ selectedRooms: 1 });
 reservationSchema.index({ createdAt: -1 });
 
-module.exports = mongoose.model('Reservation', reservationSchema);
+// Use mongoose.models to avoid OverwriteModelError
+const Reservation = mongoose.models.Reservation || mongoose.model('Reservation', reservationSchema);
+
+export default Reservation;

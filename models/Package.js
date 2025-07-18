@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const packageSchema = new mongoose.Schema({
     name: {
@@ -32,4 +32,7 @@ const packageSchema = new mongoose.Schema({
     timestamps: true
 });
 
-module.exports = mongoose.model('Package', packageSchema);
+// Use mongoose.models to avoid OverwriteModelError
+const Package = mongoose.models.Package || mongoose.model('Package', packageSchema);
+
+export default Package;

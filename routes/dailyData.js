@@ -1,8 +1,9 @@
 // routes/dailyData.js
-const express = require('express');
+import express from 'express';
+import Reservation from '../models/Reservation.js';
+import Room from '../models/RoomsModel.js';
+
 const router = express.Router();
-const Reservation = require('../models/Reservation');
-const Room = require('../models/posts');
 
 // GET /api/daily-data/summary - Quick daily numbers
 router.get('/summary', async (req, res) => {
@@ -209,4 +210,4 @@ router.get('/revenue', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

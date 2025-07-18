@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import Package from '../models/Package.js';
+
 const router = express.Router();
-const Package = require('../models/Package');
 
 // GET all packages
 router.get('/', async (req, res) => {
@@ -19,11 +20,11 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         console.log('📦 GET /api/packages/:id - Fetching package:', req.params.id);
-        const package = await Package.findById(req.params.id);
-        if (!package || !package.isActive) {
+        const packageDoc = await Package.findById(req.params.id);
+        if (!packageDoc || !packageDoc.isActive) {
             return res.status(404).json({ message: 'Package not found' });
         }
-        res.json(package);
+        res.json(packageDoc);
     } catch (error) {
         console.error('❌ Error fetching package:', error);
         res.status(500).json({ message: error.message });
@@ -45,7 +46,7 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ message: 'Price must be greater than 0' });
         }
         
-        const package = new Package({
+        const packageDoc = new Package({
             name,
             description,
             pricePerChild: parseFloat(pricePerChild),
@@ -53,7 +54,7 @@ router.post('/', async (req, res) => {
             features: features || []
         });
         
-        const savedPackage = await package.save();
+        const savedPackage = await packageDoc.save();
         console.log('✅ Package created with ID:', savedPackage._id);
         res.status(201).json(savedPackage);
     } catch (error) {
@@ -81,7 +82,7 @@ router.put('/:id', async (req, res) => {
             return res.status(400).json({ message: 'Price must be greater than 0' });
         }
         
-        const package = await Package.findOneAndUpdate(
+        const packageDoc = await Package.findOneAndUpdate(
             { _id: req.params.id, isActive: true },
             {
                 name,
@@ -93,12 +94,12 @@ router.put('/:id', async (req, res) => {
             { new: true, runValidators: true }
         );
         
-        if (!package) {
+        if (!packageDoc) {
             return res.status(404).json({ message: 'Package not found' });
         }
         
         console.log('✅ Package updated successfully');
-        res.json(package);
+        res.json(packageDoc);
     } catch (error) {
         console.error('❌ Error updating package:', error);
         res.status(400).json({ message: error.message });
@@ -109,13 +110,13 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         console.log('📦 DELETE /api/packages/:id - Deleting package:', req.params.id);
-        const package = await Package.findOneAndUpdate(
+        const packageDoc = await Package.findOneAndUpdate(
             { _id: req.params.id, isActive: true },
             { isActive: false },
             { new: true }
         );
         
-        if (!package) {
+        if (!packageDoc) {
             return res.status(404).json({ message: 'Package not found' });
         }
         
@@ -127,4 +128,4 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-module.exports = router;
+export default router;
