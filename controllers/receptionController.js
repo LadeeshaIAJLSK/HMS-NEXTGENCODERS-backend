@@ -1,4 +1,4 @@
-// controllers/receptionController.js
+// controllers/ReceptionController.js
 const Reception = require("../models/ReceptionModel");
 
 exports.getLatestReception = async (req, res) => {
