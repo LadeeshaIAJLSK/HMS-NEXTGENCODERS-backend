@@ -17,4 +17,12 @@ router.patch("/:id/status", orderController.updateOrderStatus);
 // Get orders by guest
 router.get("/guest/:guestId", orderController.getOrdersByGuest);
 
+// Delete order
+router.delete("/:id", orderController.deleteOrder);
+
+// Analytics routes
+router.get("/analytics/daily-revenue", orderController.getDailyRevenue);
+router.get("/analytics/best-selling", orderController.getBestSellingItems);
+router.get("/analytics/sales-breakdown", orderController.getSalesBreakdown);
+
 module.exports = router;
