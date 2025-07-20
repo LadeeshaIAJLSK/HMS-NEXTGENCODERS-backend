@@ -53,8 +53,8 @@ const reservationSchema = new mongoose.Schema({
   }],
   
   // Room Assignment - Only for room reservations
-  selectedRooms: [{
-    type: String,
+  selectedRooms: {
+    type: [String],
     validate: {
       validator: function(array) {
         // Only validate if this is a room reservation
@@ -65,12 +65,14 @@ const reservationSchema = new mongoose.Schema({
       },
       message: 'At least one room must be selected for room reservations'
     }
-  }],
+  },
   
   // Package Selection - NEW FIELD for day-out reservations
-  selectedPackages: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Package',
+  selectedPackages: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Package'
+    }],
     validate: {
       validator: function(array) {
         // Only validate if this is a day-out reservation
@@ -81,7 +83,7 @@ const reservationSchema = new mongoose.Schema({
       },
       message: 'At least one package must be selected for day-out reservations'
     }
-  }],
+  },
   
   // Payment Information - Same for both
   totalAmount: { 
@@ -185,8 +187,10 @@ reservationSchema.pre('save', function(next) {
   if (this.reservationType === 'room') {
     // For room reservations: calculate nights
     if (this.isModified('checkIn') || this.isModified('checkOut')) {
-      const diff = Math.ceil((this.checkOut - this.checkIn) / (1000 * 60 * 60 * 24));
-      this.duration = diff > 0 ? diff : 1;
+      if (this.checkIn && this.checkOut) {
+        const diff = Math.ceil((this.checkOut - this.checkIn) / (1000 * 60 * 60 * 24));
+        this.duration = diff > 0 ? diff : 1;
+      }
     }
   } else if (this.reservationType === 'dayOut') {
     // For day-out reservations: calculate hours

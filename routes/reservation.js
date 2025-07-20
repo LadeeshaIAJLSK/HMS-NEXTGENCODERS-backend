@@ -59,8 +59,10 @@ router.get("/search", async (req, res) => {
     };
 
     // ADD: Filter by reservation type if specified
-    if (type && ['room', 'dayOut'].includes(type)) {
-      searchQuery.reservationType = type;
+    if (type && ['room', 'dayOut', 'dayout'].includes(type)) {
+      // Normalize the type value
+      const normalizedType = type === 'dayout' ? 'dayOut' : type;
+      searchQuery.reservationType = normalizedType;
     }
 
     const results = await Reservation.find(searchQuery)
@@ -79,8 +81,10 @@ router.get("/", async (req, res) => {
     const { type } = req.query; // ADD: type parameter
     
     let query = {};
-    if (type && ['room', 'dayOut'].includes(type)) {
-      query.reservationType = type;
+    if (type && ['room', 'dayOut', 'dayout'].includes(type)) {
+      // Normalize the type value
+      const normalizedType = type === 'dayout' ? 'dayOut' : type;
+      query.reservationType = normalizedType;
     }
 
     const reservations = await Reservation.find(query)
@@ -134,9 +138,16 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
     const files = req.files;
 
     console.log("Form data received:", formData);
+    console.log("Raw reservationType:", formData.reservationType, "Type:", typeof formData.reservationType);
 
     // Determine reservation type - DEFAULT TO 'room' for backward compatibility
-    const reservationType = formData.reservationType || 'room';
+    // Handle case where reservationType might be an array (take first element)
+    let reservationType = formData.reservationType || 'room';
+    if (Array.isArray(reservationType)) {
+      reservationType = reservationType[0];
+    }
+    // Normalize the value
+    reservationType = reservationType === 'dayout' ? 'dayOut' : reservationType;
 
     const otherPersons = JSON.parse(formData.otherPersons || "[]");
     const selectedRooms = JSON.parse(formData.selectedRooms || "[]");
@@ -178,7 +189,7 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
       }
     }
 
-    // Calculate duration and dates
+    // Calculate duration and dates - FIXED
     let checkInDate = new Date(formData.checkIn);
     let checkOutDate, duration;
 
@@ -193,20 +204,31 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
         });
       }
     } else if (reservationType === 'dayOut') {
-      // NEW day-out logic
+      // NEW day-out logic - FIXED
       checkOutDate = checkInDate; // Same day
       
       if (formData.startTime && formData.endTime) {
-        const start = new Date(`${checkInDate.toISOString().split('T')[0]}T${formData.startTime}`);
-        const end = new Date(`${checkInDate.toISOString().split('T')[0]}T${formData.endTime}`);
-        duration = Math.ceil((end - start) / (1000 * 60 * 60));
+        const [startHour, startMin] = formData.startTime.split(':').map(Number);
+        const [endHour, endMin] = formData.endTime.split(':').map(Number);
         
-        if (duration <= 0) {
+        const startMinutes = startHour * 60 + startMin;
+        const endMinutes = endHour * 60 + endMin;
+        
+        if (endMinutes <= startMinutes) {
           return res.status(400).json({ 
             message: "End time must be after start time" 
           });
         }
+        
+        duration = Math.ceil((endMinutes - startMinutes) / 60); // Duration in hours
+      } else {
+        duration = 1; // Default to 1 hour if times not specified
       }
+    }
+
+    // Ensure duration is always set
+    if (!duration || duration <= 0) {
+      duration = 1; // Default minimum duration
     }
 
     // Calculate total amount - ENHANCED
@@ -222,14 +244,14 @@ router.post("/", upload.array("idFiles"), async (req, res) => {
       totalAmount = await Reservation.calculateTotal('dayOut', selectedPackages, duration, adults, kids);
     }
 
-    console.log("Calculated total amount:", totalAmount);
+    console.log("Calculated total amount:", totalAmount, "Duration:", duration);
 
     // Prepare reservation data - ENHANCED
     const reservationData = {
       reservationType: reservationType, // ADD
       checkIn: checkInDate,
       checkOut: checkOutDate,
-      duration: duration,
+      duration: duration, // Ensure this is always set
       adults: adults,
       kids: kids,
       firstName: formData.firstName,
@@ -331,7 +353,13 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    const reservationType = existingReservation.reservationType || 'room'; // ADD
+    // Handle reservation type - ensure it's not an array
+    let reservationType = existingReservation.reservationType || 'room';
+    if (Array.isArray(reservationType)) {
+      reservationType = reservationType[0];
+    }
+    // Normalize the value
+    reservationType = reservationType === 'dayout' ? 'dayOut' : reservationType;
 
     // Calculate duration based on type - ENHANCED
     let duration = parseInt(formData.duration);
@@ -344,12 +372,21 @@ router.put("/:id", async (req, res) => {
         duration = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
       }
     } else if (reservationType === 'dayOut') {
-      // NEW day-out logic
+      // NEW day-out logic - FIXED
       if (formData.startTime && formData.endTime && formData.checkIn) {
-        const start = new Date(`${formData.checkIn.split('T')[0]}T${formData.startTime}`);
-        const end = new Date(`${formData.checkIn.split('T')[0]}T${formData.endTime}`);
-        duration = Math.ceil((end - start) / (1000 * 60 * 60));
+        const [startHour, startMin] = formData.startTime.split(':').map(Number);
+        const [endHour, endMin] = formData.endTime.split(':').map(Number);
+        
+        const startMinutes = startHour * 60 + startMin;
+        const endMinutes = endHour * 60 + endMin;
+        
+        duration = Math.ceil((endMinutes - startMinutes) / 60); // Duration in hours
       }
+    }
+
+    // Ensure duration is always valid
+    if (!duration || duration <= 0) {
+      duration = existingReservation.duration || 1; // Use existing or default to 1
     }
 
     // Calculate total amount - ENHANCED
@@ -384,7 +421,7 @@ router.put("/:id", async (req, res) => {
       idType: formData.idType || "Passport",
       idNumber: formData.idNumber?.trim() || "", // Make optional
       checkIn: new Date(formData.checkIn),
-      duration: duration,
+      duration: duration, // Ensure this is always set
       adults: adults,
       kids: kids,
       otherPersons: formData.otherPersons || [],
