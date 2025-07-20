@@ -3,7 +3,23 @@ const Category = require("../models/Category");
 
 exports.getProducts = async (req, res) => {
   try {
-    const products = await Product.find().populate("category");
+    const products = await Product.find()
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
     res.json(products);
   } catch (error) {
     res.status(500).json({ error: "Error fetching products" });
@@ -12,7 +28,23 @@ exports.getProducts = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).populate("category");
+    const product = await Product.findById(req.params.id)
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
     if (!product) {
       return res.status(404).json({ error: "Product not found" });
     }
@@ -31,13 +63,166 @@ exports.getProductsByCategory = async (req, res) => {
     
     const products = await Product.find({ 
       category: { $in: categoryIds } 
-    }).populate("category");
+    })
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
     
     res.json(products);
   } catch (error) {
     res.status(500).json({ error: "Error fetching products by category" });
   }
 };
+
+// New endpoint: Get low stock products
+exports.getLowStockProducts = async (req, res) => {
+  try {
+    const lowStockProducts = await Product.find({
+      $and: [
+        { limit: { $exists: true, $ne: null } },
+        { $expr: { $lte: ["$quantity", "$limit"] } }
+      ]
+    })
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
+    
+    res.json(lowStockProducts);
+  } catch (error) {
+    console.error("Error fetching low stock products:", error);
+    res.status(500).json({ error: "Error fetching low stock products" });
+  }
+};
+
+// New endpoint: Update product stock
+exports.updateProductStock = async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    const productId = req.params.id;
+    
+    if (typeof quantity !== 'number') {
+      return res.status(400).json({ error: "Quantity must be a number" });
+    }
+    
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+    
+    // Update the quantity (can be positive or negative)
+    const newQuantity = Math.max(0, product.quantity + quantity);
+    product.quantity = newQuantity;
+    
+    await product.save();
+    
+    const updatedProduct = await Product.findById(productId)
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
+    res.json(updatedProduct);
+  } catch (error) {
+    console.error("Error updating product stock:", error);
+    res.status(500).json({ error: "Error updating product stock" });
+  }
+};
+
+// New endpoint: Update multiple product stock
+exports.updateMultipleProductStock = async (req, res) => {
+  try {
+    const { stockUpdates } = req.body;
+    
+    if (!Array.isArray(stockUpdates)) {
+      return res.status(400).json({ error: "stockUpdates must be an array" });
+    }
+    
+    const updatePromises = stockUpdates.map(async (update) => {
+      const { productId, quantity } = update;
+      
+      if (!productId || typeof quantity !== 'number') {
+        throw new Error(`Invalid update data: productId=${productId}, quantity=${quantity}`);
+      }
+      
+      const product = await Product.findById(productId);
+      if (!product) {
+        throw new Error(`Product not found: ${productId}`);
+      }
+      
+      // Update the quantity (can be positive or negative)
+      const newQuantity = Math.max(0, product.quantity + quantity);
+      product.quantity = newQuantity;
+      
+      return product.save();
+    });
+    
+    await Promise.all(updatePromises);
+    
+    // Return updated products
+    const updatedProducts = await Product.find({
+      _id: { $in: stockUpdates.map(update => update.productId) }
+    })
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
+    
+    res.json(updatedProducts);
+  } catch (error) {
+    console.error("Error updating multiple product stock:", error);
+    res.status(500).json({ error: "Error updating multiple product stock" });
+  }
+};
+
 
 exports.addProduct = async (req, res) => {
   try {
@@ -49,7 +234,23 @@ exports.addProduct = async (req, res) => {
     const newProduct = new Product(req.body);
     await newProduct.save();
     
-    const populatedProduct = await Product.findById(newProduct._id).populate("category");
+    const populatedProduct = await Product.findById(newProduct._id)
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
     
     res.status(201).json(populatedProduct);
   } catch (error) {
@@ -72,7 +273,23 @@ exports.updateProduct = async (req, res) => {
       req.params.id,
       req.body,
       { new: true }
-    ).populate("category");
+    )
+      .populate("category")
+      .populate("subCategory")
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentId",
+          model: "Category"
+        }
+      });
     
     if (!updatedProduct) {
       return res.status(404).json({ error: "Product not found" });
