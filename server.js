@@ -18,6 +18,17 @@ import guestRoutes from "./routes/guestRoutes.js";
 import packageRoutes from "./routes/packages.js";
 import dailyDataRoutes from './routes/dailyData.js';
 
+
+
+import categoryRoutes from "./routes/categoryRoutes.js";
+import productRoutes from "./routes/productRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
+
+
+
+
+
+
 dotenv.config();
 const app = express();
 app.use(cors());
@@ -43,6 +54,13 @@ app.use("/api/reservations", reservationRoutes);
 app.use('/api/guests', guestRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/daily-data', dailyDataRoutes);
+
+
+
+app.use("/categories", categoryRoutes);
+app.use("/products", productRoutes);
+app.use("/orders", orderRoutes);
+
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
