@@ -9,7 +9,10 @@ import {
     addToCart,
     removeFromCart,
     purchasePackages,
-    assignPackageToDepartment
+    assignPackageToDepartment,
+    getOwnerEmployeeList,
+    updateOwnerEmployee,
+    deleteOwnerEmployee
 } from '../controllers/userController.js';
 
 const userRouter = express.Router();
@@ -29,5 +32,9 @@ userRouter.post('/cart/purchase', userAuth, purchasePackages);
 // Package management
 userRouter.post('/packages/assign', userAuth, assignPackageToDepartment);
 
+//employee management
+userRouter.get('/:email/owner-employee', getOwnerEmployeeList);
+userRouter.put('/update-employee', updateOwnerEmployee);
+userRouter.delete('/:id/delete-employee', deleteOwnerEmployee);
 export default userRouter;
 
