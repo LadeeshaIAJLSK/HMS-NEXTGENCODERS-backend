@@ -1,12 +1,15 @@
 const express = require("express");//
 const mongoose = require("mongoose");//
 const cors = require("cors");
+require('dotenv').config();
+
 const postRoutes = require("./routes/posts");
 const roomRoutes = require("./routes/rooms");
 const reservationRoutes = require("./routes/reservation");
 const guestRoutes = require("./routes/guestRoutes");
 const packageRoutes = require("./routes/packages"); 
 const dailyDataRoutes = require('./routes/dailyData');
+const paymentRoutes = require('./routes/process-payment'); // Add this line
 
 
 
@@ -31,6 +34,7 @@ app.use("/api/reservations", reservationRoutes);// Add this line to use the room
 app.use('/api/guests', guestRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/daily-data', dailyDataRoutes);
+app.use('/api/process-payment', paymentRoutes); // Add this line to use the payment routes
 //i changes this
 
 
@@ -41,7 +45,7 @@ app.get("/", (req, res) => res.send("Server is running!"));
 
 
 const port = 8000;
-const DB_URL = "mongodb+srv://ladeekarunasinghe:Srilankaqazwsx456@cluster0.dtot1.mongodb.net/owner";
+const DB_URL = process.env.DB_URL;
 
 
 
