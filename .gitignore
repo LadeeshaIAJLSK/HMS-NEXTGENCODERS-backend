@@ -15,12 +15,6 @@ error.log*
 server.log
 log/
 
-# Environment variables
-.env
-.env.local
-.env.development
-.env.test
-.env.production
 
 # Build files
 dist/
