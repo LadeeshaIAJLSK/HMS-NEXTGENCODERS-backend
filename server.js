@@ -28,6 +28,7 @@ import reservationRoutes from './routes/reservation.js';
 import guestRoutes from './routes/guestRoutes.js';
 import packageRoutes from './routes/packages.js';
 import dailyDataRoutes from './routes/dailyData.js';
+import paymentRoutes from './routes/process-payment.js'; // Add this line
 
 import categoryRoutes from './routes/categoryRoutes.js';
 import productRoutes from './routes/productRoutes.js';
@@ -76,6 +77,7 @@ app.use('/api/reservations', reservationRoutes);
 app.use('/api/guests', guestRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/daily-data', dailyDataRoutes);
+app.use('/api/process-payment', paymentRoutes); 
 
 app.use('/categories', categoryRoutes);
 app.use('/products', productRoutes);
