@@ -1,36 +1,29 @@
-// controllers/CheckoutController.js
+const Reservation = require("../models/Reservation");
 
-const Reservation = require("../models/CheckoutModel");
-
-// GET all checked-out guests
-const getAllCheckedOutGuests = async (req, res) => {
+// GET all checked out guests
+const getAllCheckouts = async (req, res) => {
   try {
-    const checkedOutGuests = await Reservation.find({ status: "CheckedOut" }).sort({ checkoutDate: -1 });
-    res.status(200).json(checkedOutGuests);
-  } catch (error) {
-    console.error("Error fetching checked out guests:", error);
-    res.status(500).json({ message: "Server error" });
+    const checkouts = await Reservation.find({ status: "CheckedOut" });
+    res.status(200).json(checkouts);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch checkouts" });
   }
 };
 
-// GET a single guest by ID
-const getCheckedOutGuestById = async (req, res) => {
+// GET single guest by ID
+const getCheckoutById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id;
     const guest = await Reservation.findById(id);
-
-    if (!guest || guest.status !== "CheckedOut") {
-      return res.status(404).json({ message: "Guest not found or not checked out" });
+    if (!guest) {
+      return res.status(404).json({ message: "Guest not found" });
     }
-
     res.status(200).json(guest);
-  } catch (error) {
-    console.error("Error fetching guest by ID:", error);
-    res.status(500).json({ message: "Server error" });
+  } catch (err) {
+    console.error("Error fetching guest details:", err);
+    res.status(500).json({ error: "Failed to fetch guest details" });
   }
 };
 
-module.exports = {
-  getAllCheckedOutGuests,
-  getCheckedOutGuestById,
-};
+
+module.exports = { getAllCheckouts, getCheckoutById };
