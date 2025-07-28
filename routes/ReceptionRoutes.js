@@ -1,11 +1,8 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const {
-  getLatestReception,
-  addReception
-} = require("../controllers/ReceptionController");
+const { getTodayReceptionStats } = require('../controllers/ReceptionstatController');
 
-router.get("/latest", getLatestReception);
-router.post("/", addReception);
+// GET /api/reception/stats/today
+router.get('/stats/today', getTodayReceptionStats);
 
 module.exports = router;

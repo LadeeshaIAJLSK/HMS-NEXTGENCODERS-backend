@@ -1,61 +1,36 @@
-import Checkout from "../models/CheckoutModel.js";
+// controllers/CheckoutController.js
 
-// Get all checkouts
-export const getCheckouts = async (req, res) => {
+const Reservation = require("../models/CheckoutModel");
+
+// GET all checked-out guests
+const getAllCheckedOutGuests = async (req, res) => {
   try {
-    const checkouts = await Checkout.find();
-    res.json(checkouts);
+    const checkedOutGuests = await Reservation.find({ status: "CheckedOut" }).sort({ checkoutDate: -1 });
+    res.status(200).json(checkedOutGuests);
   } catch (error) {
+    console.error("Error fetching checked out guests:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Get single checkout by ID
-export const getCheckoutById = async (req, res) => {
+// GET a single guest by ID
+const getCheckedOutGuestById = async (req, res) => {
   try {
-    const checkout = await Checkout.findById(req.params.id);
-    if (!checkout) return res.status(404).json({ message: "Not found" });
-    res.json(checkout);
+    const { id } = req.params;
+    const guest = await Reservation.findById(id);
+
+    if (!guest || guest.status !== "CheckedOut") {
+      return res.status(404).json({ message: "Guest not found or not checked out" });
+    }
+
+    res.status(200).json(guest);
   } catch (error) {
-    res.status(500).json({ message: "Error fetching record" });
+    console.error("Error fetching guest by ID:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// Create new checkout
-export const createCheckout = async (req, res) => {
-  try {
-    const {
-      guestId,
-      guestName,
-      guestPhone,
-      guestEmail,
-      nicNumber,
-      roomno,
-      dateFrom,
-      dateTo,
-      remarks,
-      CheckoutHandledBy
-    } = req.body;
-
-    const newCheckout = new Checkout({
-      guestId,
-      guestName,
-      guestPhone,
-      guestEmail,
-      nicNumber,
-      roomno,
-      dateFrom,
-      dateTo,
-      remarks,
-      CheckoutHandledBy
-    });
-
-    const saved = await newCheckout.save();
-    res.status(201).json(saved);
-  } catch (error) {
-    res.status(400).json({ message: "Invalid data", error });
-  }
+module.exports = {
+  getAllCheckedOutGuests,
+  getCheckedOutGuestById,
 };
-
-
-

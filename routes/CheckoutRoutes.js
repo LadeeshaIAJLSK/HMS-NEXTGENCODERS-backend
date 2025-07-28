@@ -1,14 +1,16 @@
-import express from "express";
-import {
-  getCheckouts,
-  createCheckout,
-  getCheckoutById
-} from "../controllers/CheckoutController.js";
+// routes/CheckoutRoutes.js
 
+const express = require("express");
 const router = express.Router();
+const {
+  getAllCheckedOutGuests,
+  getCheckedOutGuestById,
+} = require("../controllers/CheckoutController");
 
-router.get("/", getCheckouts);
-router.post("/", createCheckout);
-router.get("/:id", getCheckoutById);
+// Route: GET /api/checkout
+router.get("/", getAllCheckedOutGuests);
 
-export default router;
+// Route: GET /api/checkout/:id
+router.get("/:id", getCheckedOutGuestById);
+
+module.exports = router;
