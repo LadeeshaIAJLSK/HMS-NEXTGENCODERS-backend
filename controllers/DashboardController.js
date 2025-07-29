@@ -3,15 +3,36 @@ const Reservation = require("../models/Reservation");
 const Room = require("../models/RoomsModel");
 const Order = require("../models/Order");
 
+// ✅ Updated getLatestDashboardData to match Reception Revenue Calculation
 exports.getLatestDashboardData = async (req, res) => {
   try {
     const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    const targetDate = today.toISOString().split('T')[0];
 
-    // 1. ROOM STATUS
+    const reservations = await Reservation.find({
+      deleted: false,
+      status: { $in: ['Confirmed', 'CheckedOut', 'Completed'] },
+    });
+
+    // ✅ Match with reception calculation: checkIn === today (as string) + paidAmount/advancePayment
+    const calculateDayRevenue = (reservations, date) => {
+      return reservations
+        .filter(reservation => {
+          const checkInDate = new Date(reservation.checkIn).toISOString().split('T')[0];
+          return checkInDate === date;
+        })
+        .reduce((total, reservation) => {
+          const amount = reservation.reservationType === 'dayOut'
+            ? reservation.paidAmount || 0
+            : (reservation.paidAmount || 0) + (reservation.advancePayment || 0);
+          return total + amount;
+        }, 0);
+    };
+
+    const receptionRevenue = calculateDayRevenue(reservations, targetDate);
+
+    // Room status as before
     const rooms = await Room.find();
-
     const roomStatus = {
       booked: 0,
       vacant: 0,
@@ -27,12 +48,13 @@ exports.getLatestDashboardData = async (req, res) => {
       else if (status === "out of service" || status === "maintenance") roomStatus.outOfService++;
     });
 
-    // 2. TODAY’S CHECKINS / CHECKOUTS
-    const reservationsToday = await Reservation.find({
-      updatedAt: { $gte: startOfDay, $lte: endOfDay },
-      status: { $in: ['Confirmed', 'CheckedOut', 'Completed'] },
-      deleted: false,
-    });
+    // Today CheckIns and CheckOuts (same logic)
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+
+    const reservationsToday = reservations.filter(r =>
+      r.updatedAt >= startOfDay && r.updatedAt <= endOfDay
+    );
 
     const todayCheckIns = reservationsToday.filter(r =>
       r.checkIn && r.checkIn >= startOfDay && r.checkIn <= endOfDay
@@ -42,15 +64,10 @@ exports.getLatestDashboardData = async (req, res) => {
       r.checkoutDate && r.checkoutDate >= startOfDay && r.checkoutDate <= endOfDay
     ).length;
 
-    // ✅ 3. CORRECT RECEPTION REVENUE LOGIC (used in ReceptionDashboard)
-    const todayReceptionRevenue = reservationsToday.reduce((sum, r) => {
-      return sum + (r.paidAmount || 0);
-    }, 0);
-
-    // 4. RESTAURANT REVENUE
+    // Restaurant Revenue
     const restaurantOrders = await Order.find({
       status: "completed",
-      createdAt: { $gte: startOfDay, $lte: endOfDay }
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
     });
 
     const todayRestaurantRevenue = restaurantOrders.reduce((sum, order) => {
@@ -61,16 +78,16 @@ exports.getLatestDashboardData = async (req, res) => {
     res.status(200).json({
       todayCheckIns,
       todayCheckOuts,
-      receptionRevenue: Math.round(todayReceptionRevenue * 100) / 100,
+      receptionRevenue: Math.round(receptionRevenue * 100) / 100,
       restaurantRevenue: Math.round(todayRestaurantRevenue * 100) / 100,
       ...roomStatus
     });
-
   } catch (err) {
     console.error("🔥 Error in getLatestDashboardData:", err);
     res.status(500).json({ message: "Server Error" });
   }
 };
+
 
 // 🔄 Backup Route
 exports.storeDashboardBackup = async (req, res) => {
