@@ -10,7 +10,7 @@ const guestRoutes = require("./routes/guestRoutes");
 const packageRoutes = require("./routes/packages"); 
 const dailyDataRoutes = require('./routes/dailyData');
 const paymentRoutes = require('./routes/process-payment'); // Add this line
-
+const orderRoutes =require('./routes/orderRoutes');
 
 
 
@@ -29,6 +29,9 @@ app.use(express.json());//
 app.use(cors({ origin: "*" }));
 
 app.use("/api/posts", postRoutes);
+app.use('/orders', orderRoutes);
+
+
 app.use("/api/rooms", roomRoutes);
 app.use("/api/reservations", reservationRoutes);// Add this line to use the room routes
 app.use('/api/guests', guestRoutes);

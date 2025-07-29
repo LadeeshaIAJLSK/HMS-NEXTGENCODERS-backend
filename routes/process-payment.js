@@ -1,21 +1,25 @@
 // backend/api/process-payment.js (Node.js/Express example)
 const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
 const router = express.Router();
 
-router.post('/process-payment', async (req, res) => {
+// Change the route to match frontend call
+router.post('/api/process-payment', async (req, res) => {
   try {
     const { payment_method_id, amount } = req.body;
 
-    // Create payment intent
+    // Validate amount
+    if (!amount || amount <= 0) {
+      throw new Error('Invalid payment amount');
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount, // Amount in cents
-      currency: 'inr', // Indian Rupees
+      amount: Math.round(amount * 100), // Convert to cents and ensure integer
+      currency: 'lkr', // Change to LKR for Sri Lankan Rupees
       payment_method: payment_method_id,
       confirmation_method: 'manual',
       confirm: true,
-      return_url: 'http://localhost:5176/page1/return',
+      return_url: 'http://localhost:5176/payment/return',
     });
 
     if (paymentIntent.status === 'succeeded') {
@@ -43,7 +47,7 @@ router.post('/process-payment', async (req, res) => {
     console.error('Payment error:', error);
     res.status(400).json({
       success: false,
-      error: error.message
+      error: error.message || 'Payment processing failed'
     });
   }
 });
