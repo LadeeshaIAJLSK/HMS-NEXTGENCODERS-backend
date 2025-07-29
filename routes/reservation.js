@@ -566,7 +566,7 @@ router.delete("/:id", async (req, res) => {
       return res.status(404).json({ message: "Reservation not found" });
     }
 
-    // Mark rooms as Vacant when room reservation is deleted - ONLY for room reservations
+    // Mark rooms as Vacant when room reservation is deleted
     if (reservation.reservationType === 'room' && reservation.selectedRooms && reservation.selectedRooms.length > 0) {
       await Room.updateMany(
         { RoomNo: { $in: reservation.selectedRooms } },
@@ -577,7 +577,7 @@ router.delete("/:id", async (req, res) => {
     res.json({ 
       message: `${reservation.reservationType === 'room' ? 'Room' : 'Day-out'} reservation deleted successfully` 
     });
-  } catch (err) {
+  } catch (err) {  // Fixed: Added missing try-catch block alignment
     console.error("Error deleting reservation:", err);
     res.status(500).json({ message: err.message });
   }
@@ -736,6 +736,157 @@ router.post("/:id/payments", async (req, res) => {
 
   } catch (err) {
     console.error("Error adding payment:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Add these functions at the top of the file after the imports
+const calculateDayRevenue = (reservations, date) => {
+  return reservations
+    .filter(reservation => {
+      const checkInDate = new Date(reservation.checkIn).toISOString().split('T')[0];
+      return checkInDate === date;
+    })
+    .reduce((total, reservation) => {
+      // For day-out reservations, use only paidAmount
+      // For room reservations, use paidAmount + advancePayment
+      const amount = reservation.reservationType === 'dayOut' 
+        ? reservation.paidAmount || 0
+        : (reservation.paidAmount || 0) + (reservation.advancePayment || 0);
+      return total + amount;
+    }, 0);
+};
+
+const calculateWeekRevenue = (reservations) => {
+  const today = new Date();
+  const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  return reservations
+    .filter(reservation => {
+      const checkInDate = new Date(reservation.checkIn);
+      return checkInDate >= weekAgo && checkInDate <= today;
+    })
+    .reduce((total, reservation) => {
+      const amount = reservation.reservationType === 'dayOut' 
+        ? reservation.paidAmount || 0
+        : (reservation.paidAmount || 0) + (reservation.advancePayment || 0);
+      return total + amount;
+    }, 0);
+};
+
+// Add these routes before module.exports = router;
+
+// Get revenue for a specific date
+router.get("/revenue/daily/:date?", async (req, res) => {
+  try {
+    const targetDate = req.params.date || new Date().toISOString().split('T')[0];
+    const reservations = await Reservation.find();
+    
+    const dailyRevenue = calculateDayRevenue(reservations, targetDate);
+
+    // Get separate totals for room and day-out reservations
+    const roomRevenue = calculateDayRevenue(
+      reservations.filter(r => r.reservationType === 'room'),
+      targetDate
+    );
+
+    const dayOutRevenue = calculateDayRevenue(
+      reservations.filter(r => r.reservationType === 'dayOut'),
+      targetDate
+    );
+
+    res.json({
+      date: targetDate,
+      totalRevenue: dailyRevenue,
+      roomRevenue: roomRevenue,
+      dayOutRevenue: dayOutRevenue
+    });
+  } catch (err) {
+    console.error("Error calculating daily revenue:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get revenue for the past week
+router.get("/revenue/weekly", async (req, res) => {
+  try {
+    const reservations = await Reservation.find();
+    const weeklyRevenue = calculateWeekRevenue(reservations);
+
+    // Get separate totals for room and day-out reservations
+    const roomRevenue = calculateWeekRevenue(
+      reservations.filter(r => r.reservationType === 'room')
+    );
+
+    const dayOutRevenue = calculateWeekRevenue(
+      reservations.filter(r => r.reservationType === 'dayOut')
+    );
+
+    // Calculate daily breakdown for the week
+    const dailyBreakdown = {};
+    const today = new Date();
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+      dailyBreakdown[date] = calculateDayRevenue(reservations, date);
+    }
+
+    res.json({
+      totalRevenue: weeklyRevenue,
+      roomRevenue: roomRevenue,
+      dayOutRevenue: dayOutRevenue,
+      dailyBreakdown: dailyBreakdown
+    });
+  } catch (err) {
+    console.error("Error calculating weekly revenue:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Add a route for custom date range revenue
+router.get("/revenue/range/:startDate/:endDate", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.params;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    const reservations = await Reservation.find({
+      checkIn: { 
+        $gte: start,
+        $lte: end 
+      }
+    });
+
+    const totalRevenue = reservations.reduce((total, reservation) => {
+      const amount = reservation.reservationType === 'dayOut' 
+        ? reservation.paidAmount || 0
+        : (reservation.paidAmount || 0) + (reservation.advancePayment || 0);
+      return total + amount;
+    }, 0);
+
+    const roomRevenue = reservations
+      .filter(r => r.reservationType === 'room')
+      .reduce((total, reservation) => {
+        return total + ((reservation.paidAmount || 0) + (reservation.advancePayment || 0));
+      }, 0);
+
+    const dayOutRevenue = reservations
+      .filter(r => r.reservationType === 'dayOut')
+      .reduce((total, reservation) => {
+        return total + (reservation.paidAmount || 0);
+      }, 0);
+
+    res.json({
+      startDate,
+      endDate,
+      totalRevenue,
+      roomRevenue,
+      dayOutRevenue,
+      reservationCount: reservations.length
+    });
+  } catch (err) {
+    console.error("Error calculating range revenue:", err);
     res.status(500).json({ message: err.message });
   }
 });
