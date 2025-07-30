@@ -1,80 +1,73 @@
+// ✅ DashboardController.js - Updated Today CheckIn/CheckOut logic
 const DashboardBackup = require("../models/DashboardModel");
 const Reservation = require("../models/Reservation");
 const Room = require("../models/RoomsModel");
 const Order = require("../models/Order");
 
-// ✅ Updated getLatestDashboardData to match Reception Revenue Calculation
 exports.getLatestDashboardData = async (req, res) => {
   try {
-    const today = new Date();
-    const targetDate = today.toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+
+    // Define start and end of day
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
 
     const reservations = await Reservation.find({
       deleted: false,
       status: { $in: ['Confirmed', 'CheckedOut', 'Completed'] },
     });
 
-    // ✅ Match with reception calculation: checkIn === today (as string) + paidAmount/advancePayment
+    // ✅ Revenue
     const calculateDayRevenue = (reservations, date) => {
-      return reservations
-        .filter(reservation => {
-          const checkInDate = new Date(reservation.checkIn).toISOString().split('T')[0];
-          return checkInDate === date;
-        })
-        .reduce((total, reservation) => {
-          const amount = reservation.reservationType === 'dayOut'
-            ? reservation.paidAmount || 0
-            : (reservation.paidAmount || 0) + (reservation.advancePayment || 0);
-          return total + amount;
-        }, 0);
+      return reservations.filter(res => {
+        const checkIn = new Date(res.checkIn).toISOString().split('T')[0];
+        return checkIn === date;
+      }).reduce((total, res) => {
+        const paid = res.reservationType === 'dayOut'
+          ? res.paidAmount || 0
+          : (res.paidAmount || 0) + (res.advancePayment || 0);
+        return total + paid;
+      }, 0);
     };
 
-    const receptionRevenue = calculateDayRevenue(reservations, targetDate);
+    const receptionRevenue = calculateDayRevenue(reservations, today);
 
-    // Room status as before
+    // ✅ Room status
     const rooms = await Room.find();
-    const roomStatus = {
-      booked: 0,
-      vacant: 0,
-      occupied: 0,
-      outOfService: 0,
-    };
-
+    const roomStatus = { booked: 0, vacant: 0, occupied: 0, outOfService: 0 };
     rooms.forEach(room => {
       const status = room.RStatus?.toLowerCase();
-      if (status === "booked") roomStatus.booked++;
-      else if (status === "vacant") roomStatus.vacant++;
-      else if (status === "occupied") roomStatus.occupied++;
-      else if (status === "out of service" || status === "maintenance") roomStatus.outOfService++;
+      if (status === 'booked') roomStatus.booked++;
+      else if (status === 'vacant') roomStatus.vacant++;
+      else if (status === 'occupied') roomStatus.occupied++;
+      else if (status === 'out of service' || status === 'maintenance') roomStatus.outOfService++;
     });
 
-    // Today CheckIns and CheckOuts (same logic)
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    // ✅ Accurate Today Check-ins and Check-outs
+    const todayCheckIns = reservations.filter(res => {
+      const checkInDate = new Date(res.checkIn).toISOString().split('T')[0];
+      return checkInDate === today;
+    }).length;
 
-    const reservationsToday = reservations.filter(r =>
-      r.updatedAt >= startOfDay && r.updatedAt <= endOfDay
-    );
+    const todayCheckOuts = reservations.filter(res => {
+      if (res.reservationType === 'dayOut') {
+        const reservationDate = new Date(res.checkIn).toISOString().split('T')[0];
+        return reservationDate === today;
+      } else {
+        const checkOutDate = res.checkOut ? new Date(res.checkOut).toISOString().split('T')[0] : null;
+        return checkOutDate === today;
+      }
+    }).length;
 
-    const todayCheckIns = reservationsToday.filter(r =>
-      r.checkIn && r.checkIn >= startOfDay && r.checkIn <= endOfDay
-    ).length;
-
-    const todayCheckOuts = reservationsToday.filter(r =>
-      r.checkoutDate && r.checkoutDate >= startOfDay && r.checkoutDate <= endOfDay
-    ).length;
-
-    // Restaurant Revenue
     const restaurantOrders = await Order.find({
       status: "completed",
       createdAt: { $gte: startOfDay, $lte: endOfDay },
     });
 
-    const todayRestaurantRevenue = restaurantOrders.reduce((sum, order) => {
-      return sum + (order.total || 0);
-    }, 0);
+    const todayRestaurantRevenue = restaurantOrders.reduce((sum, order) => sum + (order.total || 0), 0);
 
-    // ✅ FINAL RESPONSE
     res.status(200).json({
       todayCheckIns,
       todayCheckOuts,
@@ -88,8 +81,6 @@ exports.getLatestDashboardData = async (req, res) => {
   }
 };
 
-
-// 🔄 Backup Route
 exports.storeDashboardBackup = async (req, res) => {
   try {
     const {
@@ -117,7 +108,6 @@ exports.storeDashboardBackup = async (req, res) => {
     });
 
     await newBackup.save();
-
     res.status(200).json({ message: "Backup stored successfully" });
   } catch (err) {
     console.error("Backup store error:", err);
