@@ -1,6 +1,6 @@
-import Cart from "../models/CartModels.js";
+const Cart = require("../models/CartModels.js");
 
-export const addToCart = async (req, res) => {
+const addToCart = async (req, res) => {
   try {
     const {
       name,
@@ -74,7 +74,7 @@ export const addToCart = async (req, res) => {
   }
 };
 
-export const countMyCart = async (req, res) => {
+const countMyCart = async (req, res) => {
   try {
     const { userEmail } = req.params;
 
@@ -94,7 +94,7 @@ export const countMyCart = async (req, res) => {
   }
 };
 
-export const myCartItems = async (req, res) => {
+const myCartItems = async (req, res) => {
   try {
     const { userEmail } = req.params;
 
@@ -111,7 +111,7 @@ export const myCartItems = async (req, res) => {
   }
 };
 
-export const myPurchasedItems = async (req, res) => {
+const myPurchasedItems = async (req, res) => {
   try {
     const { userEmail, role } = req.params;
 
@@ -140,7 +140,7 @@ export const myPurchasedItems = async (req, res) => {
   }
 };
 
-export const removeCartItems = async (req, res) => {
+const removeCartItems = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -157,7 +157,7 @@ export const removeCartItems = async (req, res) => {
   }
 };
 
-export const purchaseCartItems = async (req, res) => {
+const purchaseCartItems = async (req, res) => {
   try {
     const allIds = req.body;
     if (!Array.isArray(allIds)) {
@@ -174,4 +174,13 @@ export const purchaseCartItems = async (req, res) => {
     console.error("Error purchasing cart items:", error);
     res.status(500).json({ message: "Server error" });
   }
+};
+
+module.exports = {
+  addToCart,
+  countMyCart,
+  myCartItems,
+  myPurchasedItems,
+  removeCartItems,
+  purchaseCartItems,
 };

@@ -1,7 +1,7 @@
-import userModel from "../models/userModel.js";
-import bcrypt from "bcryptjs";
+const userModel = require("../models/userModel.js");
+const bcrypt = require("bcryptjs");
 
-export const getUserData = async (req, res) => {
+const getUserData = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await userModel.findById(userId);
@@ -24,7 +24,7 @@ export const getUserData = async (req, res) => {
   }
 };
 
-export const getDashboardData = async (req, res) => {
+const getDashboardData = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await userModel.findById(userId);
@@ -49,7 +49,7 @@ export const getDashboardData = async (req, res) => {
   }
 };
 
-export const getPackages = async (req, res) => {
+const getPackages = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await userModel.findById(userId);
@@ -69,7 +69,7 @@ export const getPackages = async (req, res) => {
   }
 };
 
-export const getMyPackages = async (req, res) => {
+const getMyPackages = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await userModel.findById(userId);
@@ -89,7 +89,7 @@ export const getMyPackages = async (req, res) => {
   }
 };
 
-export const getCart = async (req, res) => {
+const getCart = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await userModel.findById(userId);
@@ -109,7 +109,7 @@ export const getCart = async (req, res) => {
   }
 };
 
-export const addToCart = async (req, res) => {
+const addToCart = async (req, res) => {
   try {
     const { userId } = req.body;
     const { packageId, quantity = 1 } = req.body;
@@ -140,7 +140,7 @@ export const addToCart = async (req, res) => {
   }
 };
 
-export const removeFromCart = async (req, res) => {
+const removeFromCart = async (req, res) => {
   try {
     const { userId } = req.body;
     const { packageId } = req.body;
@@ -165,7 +165,7 @@ export const removeFromCart = async (req, res) => {
   }
 };
 
-export const purchasePackages = async (req, res) => {
+const purchasePackages = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await userModel.findById(userId);
@@ -204,7 +204,7 @@ export const purchasePackages = async (req, res) => {
   }
 };
 
-export const assignPackageToDepartment = async (req, res) => {
+const assignPackageToDepartment = async (req, res) => {
   try {
     const { userId } = req.body;
     const { packageId, department } = req.body;
@@ -238,7 +238,7 @@ export const assignPackageToDepartment = async (req, res) => {
   }
 };
 
-export const getOwnerEmployeeList = async (req, res) => {
+const getOwnerEmployeeList = async (req, res) => {
   try {
     const { email } = req.params;
 
@@ -259,7 +259,7 @@ export const getOwnerEmployeeList = async (req, res) => {
   }
 };
 
-export const updateOwnerEmployee = async (req, res) => {
+const updateOwnerEmployee = async (req, res) => {
   try {
     const { _id, email, name, role, password, isActive } = req.body;
 
@@ -299,7 +299,7 @@ export const updateOwnerEmployee = async (req, res) => {
   }
 };
 
-export const deleteOwnerEmployee = async (req, res) => {
+const deleteOwnerEmployee = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -318,4 +318,19 @@ export const deleteOwnerEmployee = async (req, res) => {
     console.error("Delete error:", error);
     return res.status(500).json({ message: "Server error" });
   }
+};
+
+module.exports = {
+  getUserData,
+  getDashboardData,
+  getPackages,
+  getMyPackages,
+  getCart,
+  addToCart,
+  removeFromCart,
+  purchasePackages,
+  assignPackageToDepartment,
+  getOwnerEmployeeList,
+  updateOwnerEmployee,
+  deleteOwnerEmployee,
 };

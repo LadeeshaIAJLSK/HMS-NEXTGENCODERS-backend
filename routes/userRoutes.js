@@ -1,19 +1,19 @@
-import express from 'express'
-import userAuth from '../middleware/userAuth.js';
-import { 
-    getUserData, 
-    getDashboardData, 
-    getPackages, 
-    getCart, 
-    getMyPackages,
-    addToCart,
-    removeFromCart,
-    purchasePackages,
-    assignPackageToDepartment,
-    getOwnerEmployeeList,
-    updateOwnerEmployee,
-    deleteOwnerEmployee
-} from '../controllers/userController.js';
+const express = require('express');
+const userAuth = require('../middleware/userAuth');
+const {
+  getUserData,
+  getDashboardData,
+  getPackages,
+  getCart,
+  getMyPackages,
+  addToCart,
+  removeFromCart,
+  purchasePackages,
+  assignPackageToDepartment,
+  getOwnerEmployeeList,
+  updateOwnerEmployee,
+  deleteOwnerEmployee,
+} = require('../controllers/userController');
 
 const userRouter = express.Router();
 
@@ -32,9 +32,11 @@ userRouter.post('/cart/purchase', userAuth, purchasePackages);
 // Package management
 userRouter.post('/packages/assign', userAuth, assignPackageToDepartment);
 
-//employee management
+// Employee management
 userRouter.get('/:email/owner-employee', getOwnerEmployeeList);
 userRouter.put('/update-employee', updateOwnerEmployee);
 userRouter.delete('/:id/delete-employee', deleteOwnerEmployee);
-export default userRouter;
+
+module.exports = userRouter;
+
 

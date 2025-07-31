@@ -1,9 +1,9 @@
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import userModel from "../models/userModel.js";
-import transporter from "../config/nodemailer.js";
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const userModel = require("../models/userModel.js");
+const transporter = require("../config/nodemailer.js");
 
-export const register = async (req, res) => {
+const register = async (req, res) => {
   const { name, email, password, role, ownerEmail } = req.body;
 
   if (!name || !email || !password) {
@@ -61,7 +61,7 @@ export const register = async (req, res) => {
   }
 };
 
-export const login = async (req, res) => {
+const login = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -119,7 +119,7 @@ export const login = async (req, res) => {
   }
 };
 
-export const logout = async (req, res) => {
+const logout = async (req, res) => {
   try {
     res.clearCookie("token", {
       httpOnly: true,
@@ -133,7 +133,7 @@ export const logout = async (req, res) => {
   }
 };
 
-export const sendVerifyOtp = async (req, res) => {
+const sendVerifyOtp = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await userModel.findById(userId);
@@ -167,7 +167,7 @@ export const sendVerifyOtp = async (req, res) => {
   }
 };
 
-export const verifyEmail = async (req, res) => {
+const verifyEmail = async (req, res) => {
   const { userId, otp } = req.body;
 
   if (!userId || !otp) {
@@ -200,7 +200,7 @@ export const verifyEmail = async (req, res) => {
   }
 };
 
-export const isAuthenticated = async (req, res) => {
+const isAuthenticated = async (req, res) => {
   try {
     return res.json({ success: true });
   } catch (error) {
@@ -208,7 +208,7 @@ export const isAuthenticated = async (req, res) => {
   }
 };
 
-export const sendResetOtp = async (req, res) => {
+const sendResetOtp = async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
@@ -241,7 +241,7 @@ export const sendResetOtp = async (req, res) => {
   }
 };
 
-export const resetPassword = async (req, res) => {
+const resetPassword = async (req, res) => {
   const { email, otp, newPassword } = req.body;
 
   if (!email || !otp || !newPassword) {
@@ -278,4 +278,15 @@ export const resetPassword = async (req, res) => {
   } catch (error) {
     return res.json({ success: false, message: error.message });
   }
+};
+
+module.exports = {
+  register,
+  login,
+  logout,
+  sendVerifyOtp,
+  verifyEmail,
+  isAuthenticated,
+  sendResetOtp,
+  resetPassword,
 };
