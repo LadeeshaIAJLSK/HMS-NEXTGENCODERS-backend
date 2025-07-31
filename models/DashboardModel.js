@@ -18,4 +18,4 @@ const DashboardSchema = new mongoose.Schema({
   ]
 }, { timestamps: true });
 
-module.exports = mongoose.model("Reception", DashboardSchema);
+module.exports = mongoose.model("OwnerDashboard", DashboardSchema);
