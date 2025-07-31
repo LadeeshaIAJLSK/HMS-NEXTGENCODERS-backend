@@ -1,5 +1,6 @@
 const express = require('express');
 const userAuth = require('../middleware/userAuth');
+
 const {
   getUserData,
   getDashboardData,
@@ -12,11 +13,10 @@ const {
   assignPackageToDepartment,
   getOwnerEmployeeList,
   updateOwnerEmployee,
-  deleteOwnerEmployee,
+  deleteOwnerEmployee
 } = require('../controllers/userController');
 
 const userRouter = express.Router();
-
 // Basic user routes
 userRouter.get('/data', userAuth, getUserData);
 userRouter.get('/dashboard', userAuth, getDashboardData);
@@ -32,11 +32,10 @@ userRouter.post('/cart/purchase', userAuth, purchasePackages);
 // Package management
 userRouter.post('/packages/assign', userAuth, assignPackageToDepartment);
 
-// Employee management
+//employee management
 userRouter.get('/:email/owner-employee', getOwnerEmployeeList);
 userRouter.put('/update-employee', updateOwnerEmployee);
 userRouter.delete('/:id/delete-employee', deleteOwnerEmployee);
 
 module.exports = userRouter;
-
 
