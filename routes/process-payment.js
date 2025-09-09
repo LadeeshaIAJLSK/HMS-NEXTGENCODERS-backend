@@ -1,13 +1,21 @@
 import express from 'express';
 import Stripe from 'stripe';
+import dotenv from 'dotenv';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+dotenv.config();
+
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 
 const router = express.Router();
 
 router.post('/process-payment', async (req, res) => {
   try {
+    if (!stripe) {
+      return res.status(500).json({ success: false, error: 'Stripe secret key is not configured on the server.' });
+    }
+
     const { payment_method_id, amount } = req.body;
 
     // Create payment intent
