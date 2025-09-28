@@ -5,6 +5,22 @@ import { check, validationResult } from 'express-validator';
 const router = express.Router();
 
 // Get all active reservations with filtering
+
+// Get only guest names and room numbers for active reservations
+router.get('/names', async (req, res) => {
+  try {
+    const guests = await Reservation.find(
+      { deleted: false },
+      'firstName surname selectedRooms'
+    );
+    res.json(guests);
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+});
+
+
+// Get all active reservations with filtering
 router.get('/', async (req, res) => {
   try {
     const { name, email, mobile, page = 1, limit = 10 } = req.query;
@@ -217,7 +233,7 @@ router.delete('/hard/:id', async (req, res) => {
       return res.status(404).json({ msg: 'Reservation not found' });
     }
     
-    await reservation.deleteOne();
+    await reservation.remove();
     
     res.json({ msg: 'Reservation permanently deleted' });
   } catch (err) {
@@ -227,3 +243,8 @@ router.delete('/hard/:id', async (req, res) => {
 });
 
 export default router;
+
+
+
+
+

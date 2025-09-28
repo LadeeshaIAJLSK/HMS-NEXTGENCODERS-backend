@@ -276,3 +276,14 @@ export const getSalesBreakdown = async (req, res) => {
     res.status(500).json({ error: "Error fetching sales breakdown" });
   }
 };
+
+// Get orders with status 'preparing'
+export const getPreparingOrders = async (req, res) => {
+  try {
+    const preparingOrders = await Order.find({ status: 'preparing' }).sort({ createdAt: -1 });
+    res.json(preparingOrders);
+  } catch (error) {
+    console.error('Error fetching preparing orders:', error);
+    res.status(500).json({ error: 'Error fetching preparing orders' });
+  }
+};

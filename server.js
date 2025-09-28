@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+dotenv.config();
 
 // Load environment variables
 dotenv.config();
@@ -48,7 +49,7 @@ mongoose.connect(process.env.MONGO_URI, {
 
 // Middlewares
 app.use(cors({
-  origin: 'http://localhost:5175',
+  origin: 'http://localhost:5173',
 
   credentials: true
 }));
