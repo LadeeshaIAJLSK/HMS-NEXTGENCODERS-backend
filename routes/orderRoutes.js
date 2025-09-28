@@ -1,29 +1,44 @@
 import express from "express";
-import * as orderController from "../controllers/orderController.js";
+import {
+  createOrder,
+  getOrders,
+  getOrderById,
+  updateOrderStatus,
+  getOrdersByGuest,
+  deleteOrder,
+  getDailyRevenue,
+  getBestSellingItems,
+  getSalesBreakdown,
+  getPreparingOrders
+} from "../controllers/orderController.js";
 
 const router = express.Router();
 
+router.get('/preparing', getPreparingOrders);
+
 // Create a new order
-router.post("/", orderController.createOrder);
+router.post("/", createOrder);
 
 // Get all orders
-router.get("/", orderController.getOrders);
+router.get("/", getOrders);
 
 // Get order by ID
-router.get("/:id", orderController.getOrderById);
+router.get("/:id", getOrderById);
 
 // Update order status
-router.patch("/:id/status", orderController.updateOrderStatus);
+router.patch("/:id/status", updateOrderStatus);
 
 // Get orders by guest
-router.get("/guest/:guestId", orderController.getOrdersByGuest);
+router.get("/guest/:guestId", getOrdersByGuest);
+
+// GET /preparing - get all orders with status 'preparing'
 
 // Delete order
-router.delete("/:id", orderController.deleteOrder);
+router.delete("/:id", deleteOrder);
 
 // Analytics routes
-router.get("/analytics/daily-revenue", orderController.getDailyRevenue);
-router.get("/analytics/best-selling", orderController.getBestSellingItems);
-router.get("/analytics/sales-breakdown", orderController.getSalesBreakdown);
+router.get("/analytics/daily-revenue", getDailyRevenue);
+router.get("/analytics/best-selling", getBestSellingItems);
+router.get("/analytics/sales-breakdown", getSalesBreakdown);
 
 export default router;
